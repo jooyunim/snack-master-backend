@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // Environment Settings
+    "target": "ES2022",
+    "module": "CommonJS",
+    "types": ["node"],
+
+    // Other Outputs
+    "sourceMap": true,
+
+    // Recommended Options
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist"]
+}
+
+// Visit https://aka.ms/tsconfig to read more about this file
+// See also https://aka.ms/tsconfig/module
+
+// Environment Settings
+// "moduleResolution": "Node",
+
+// Stricter Typechecking Options
+// "noUncheckedIndexedAccess": true,
+// "exactOptionalPropertyTypes": true,
+
+// Style Options
+// "verbatimModuleSyntax": true,
+// "noUncheckedSideEffectImports": true,
+// "noImplicitReturns": true,
+// "noImplicitOverride": true,
+// "noUnusedLocals": true,
+// "noUnusedParameters": true,
+// "noFallthroughCasesInSwitch": true,
+// "noPropertyAccessFromIndexSignature": true,

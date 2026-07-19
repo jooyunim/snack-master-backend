@@ -1,0 +1,221 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+   url      = env("DATABASE_URL")
+}
+
+model Company {
+  id Int @id @default(autoincrement()) 
+  name String //기업명 (최고 관리자 프로필에서 수정)
+  defaultMonthlyBudget Int  //매달 시작 예산
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  
+  users User[] 
+  invitations Invitation[] 
+  purchaseRequests PurchaseRequest[] 
+  budgets Budget[]
+  pointTransactions PointTransaction[]
+}
+
+model Invitation {
+  id Int @id @default(autoincrement())
+  companyId Int 
+  invitedById String @db.Uuid
+  email String @unique @db.VarChar
+  name String
+  role Role
+  token String @unique
+  status InvitationStatus @default(PENDING)
+  expiresAt DateTime  @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  company Company @relation(fields: [companyId], references: [id]) 
+  invitedBy User @relation("InvitationSender", fields: [invitedById], references: [id])
+}
+
+model User {
+  id String @id @default(uuid()) @db.Uuid
+  companyId Int 
+  email String @unique
+  password String
+  name String
+  role Role 
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  deletedAt DateTime? @db.Timestamp(6)
+
+  wishLists WishList[] 
+  cartItems CartItem[]
+  pointTransactions PointTransaction[]
+
+  company Company @relation(fields: [companyId], references: [id])
+  createdProducts Product[] @relation("ProductCreator")
+  sentInvitations Invitation[] @relation("InvitationSender")
+  requestedPurchaseRequests PurchaseRequest[] @relation("PurchaseRequester")
+  resolvedPurchaseRequests PurchaseRequest[] @relation("PurchaseResolver")
+  refundedPurchaseRequests PurchaseRequest[] @relation("PurchaseRefunder")
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+  categoryId Int
+  creatorId String @db.Uuid
+  name String
+  price Int
+  s3Key String
+  filename String
+  linkUrl String //제품 링크
+  totalSold Int @default(0) //판매순 정렬용
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  deletedAt DateTime? @db.Timestamp(6)
+
+  wishLists WishList[] 
+  cartItems CartItem[] 
+  purchaseRequestItems PurchaseRequestItem[]
+
+  category Category @relation(fields: [categoryId], references: [id])
+  creator User @relation("ProductCreator", fields: [creatorId], references: [id])
+}
+
+model Category {
+  id Int @id @default(autoincrement())
+  parentId Int? //self-referencing FK
+  name String
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  products Product[]
+
+  parent Category? @relation("CategoryToCategory", fields: [parentId], references: [id]) 
+  children Category[] @relation("CategoryToCategory")
+}
+
+model WishList {
+  id Int @id @default(autoincrement())
+  userId String @db.Uuid
+  productId Int
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id]) 
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model CartItem {
+  id Int @id @default(autoincrement())
+  userId String @db.Uuid
+  productId Int
+  quantity Int
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id]) 
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([userId, productId])
+}
+
+model PurchaseRequest {
+  id Int @id @default(autoincrement())
+  companyId Int
+  requesterId String @db.Uuid
+  resolverId String? @db.Uuid
+  status PurchaseRequestStatus @default(PENDING)
+  requestMessage String?
+  resultMessage String? //승인/반려 메시지
+  shippingFee Int @default(3000)
+  pointsUsed Int @default(0) //이 구매에 사용된 포인트, 승인 시에만 실제 차감
+  totalAmount Int  //‘상품합계+배송비'
+  refundedAt DateTime?  @db.Timestamp(6) //승인 후 취소(환불) 처리 시각
+  refundedById String? @db.Uuid
+  refundReason String? //불량/오배송 등 사유
+  requestedAt DateTime @default(now()) @db.Timestamp(6)
+  resolvedAt DateTime? @db.Timestamp(6)
+
+  company Company @relation(fields: [companyId], references: [id])
+  requester User @relation("PurchaseRequester", fields: [requesterId], references: [id])
+  resolver User? @relation("PurchaseResolver", fields: [resolverId], references: [id])
+  refundedBy User? @relation("PurchaseRefunder", fields: [refundedById], references: [id])
+
+  items PurchaseRequestItem[]
+  pointTransactions PointTransaction[]
+}
+
+model PurchaseRequestItem {
+  id Int @id @default(autoincrement())
+  purchaseRequestId Int
+  productId Int  //원본 참조용
+  productName String //스냅샷
+  price Int //스냅샷
+  imageUrl String //스냅샷
+  quantity Int
+
+  purchaseRequest PurchaseRequest @relation(fields: [purchaseRequestId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+}
+
+model Budget {
+  id  Int @id @default(autoincrement())
+  companyId Int
+  year Int
+  month Int
+  amount Int //이번 달 예산 (수정 대상)
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  company Company @relation(fields: [companyId], references: [id])
+  
+  @@unique([companyId, year, month])
+}
+
+model PointTransaction {
+  id Int @id @default(autoincrement())
+  userId String @db.Uuid
+  companyId Int //집계/리포트용
+  type PointType 
+  amount Int //항상 양수. 잔액 계산 시 EARN은 +, USE는 -로 처리
+  purchaseRequestId Int?  //EARN/USE는 필수, ADMIN_ADJUST는 nullable 가능 (오류정정, 이벤트/프로모션, 특정 구매건 보정 등)
+  description String? //관리자 조정 사유
+  createdAt DateTime @default(now()) @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  purchaseRequest PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
+}
+
+enum Role {
+USER
+ADMIN
+SUPER_ADMIN
+}
+
+enum PointType {
+  EARN //승인 시 자동 적립, 실결제액 기준
+  USE //승인 시 사용 차감
+  ADMIN_ADJUST //관리자 수동 조정
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED //승인 전 취소(요청 철회)
+  REFUNDED  //승인 후 취소(불량 등으로 사후 취소/반품)
+}
