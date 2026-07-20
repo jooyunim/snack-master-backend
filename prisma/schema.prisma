@@ -50,6 +50,8 @@ model User {
   password  String
   name      String
   role      Role
+  refreshToken String?
+  refreshTokenExpiresAt DateTime?  @db.Timestamp(6)
   createdAt DateTime  @default(now()) @db.Timestamp(6)
   updatedAt DateTime  @updatedAt @db.Timestamp(6)
   deletedAt DateTime? @db.Timestamp(6)
