@@ -42,6 +42,36 @@ export const findById = async (id: number, companyId: number) => {
   });
 };
 
+export const findBudgetByYearMonth = async (
+  companyId: number,
+  year: number,
+  month: number
+) => {
+  return await prisma.budget.findUnique({
+    where: { companyId_year_month: { companyId, year, month } },
+  });
+};
+
+export const findAddApprovedRequests = async (
+  companyId: number,
+  start: Date,
+  end: Date
+) => {
+  return await prisma.purchaseRequest.aggregate({
+    where: {
+      companyId,
+      status: 'APPROVED',
+      resolvedAt: {
+        gte: start,
+        lt: end,
+      },
+    },
+    _sum: {
+      totalAmount: true,
+    },
+  });
+};
+
 export const update = async ({
   id,
   companyId,

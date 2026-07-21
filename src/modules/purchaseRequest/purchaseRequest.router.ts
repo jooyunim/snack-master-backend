@@ -4,7 +4,8 @@ import * as purchaseRequestController from './purchaseRequest.controller';
 const router = Router();
 
 router.get('/', purchaseRequestController.getRequests);
-router.put('/:id/approve', purchaseRequestController.approveRequest);
-router.put('/:id/reject', purchaseRequestController.rejectRequest);
+router.get('/:id', purchaseRequestController.getRequest);
+router.patch('/:id/approve', purchaseRequestController.approveRequest);
+router.patch('/:id/reject', purchaseRequestController.rejectRequest);
 
 export default router;

@@ -17,6 +17,21 @@ export const getRequests = async (
   }
 };
 
+export const getRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+    const companyId = req.user.companyId;
+    const request = await purchaseRequestService.getDetail(id, companyId);
+    return res.status(200).json(request);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const approveRequest = async (
   req: Request,
   res: Response,
