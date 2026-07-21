@@ -16,8 +16,8 @@ model Company {
   id                   Int      @id @default(autoincrement())
   name                 String //기업명 (최고 관리자 프로필에서 수정)
   defaultMonthlyBudget Int //매달 시작 예산
-  createdAt            DateTime @default(now()) @db.Timestamp(6)
-  updatedAt            DateTime @updatedAt @db.Timestamp(6)
+  createdAt            DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(6)
 
   users             User[]
   invitations       Invitation[]
@@ -36,8 +36,8 @@ model Invitation {
   role        Role
   token       String           @unique
   status      InvitationStatus @default(PENDING)
-  expiresAt   DateTime         @db.Timestamp(6)
-  createdAt   DateTime         @default(now()) @db.Timestamp(6)
+  expiresAt   DateTime         @db.Timestamptz(6)
+  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
 
   company   Company @relation(fields: [companyId], references: [id])
   invitedBy User    @relation("InvitationSender", fields: [invitedById], references: [id])
@@ -50,11 +50,11 @@ model User {
   password  String
   name      String
   role      Role
-  refreshToken String?
-  refreshTokenExpiresAt DateTime?  @db.Timestamp(6)
-  createdAt DateTime  @default(now()) @db.Timestamp(6)
-  updatedAt DateTime  @updatedAt @db.Timestamp(6)
-  deletedAt DateTime? @db.Timestamp(6)
+  refreshTokenHash String?
+  refreshTokenExpiresAt DateTime?  @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt DateTime? @db.Timestamptz(6)
 
   wishLists         WishList[]
   cartItems         CartItem[]
@@ -79,9 +79,9 @@ model Product {
   filename   String
   linkUrl    String //제품 링크
   totalSold  Int       @default(0) //판매순 정렬용
-  createdAt  DateTime  @default(now()) @db.Timestamp(6)
-  updatedAt  DateTime  @updatedAt @db.Timestamp(6)
-  deletedAt  DateTime? @db.Timestamp(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(6)
+  deletedAt  DateTime? @db.Timestamptz(6)
 
   wishLists            WishList[]
   cartItems            CartItem[]
@@ -96,8 +96,8 @@ model Category {
   id        Int      @id @default(autoincrement())
   parentId  Int? //self-referencing FK
   name      String
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
   products Product[]
 
@@ -109,7 +109,7 @@ model WishList {
   id        Int      @id @default(autoincrement())
   userId    String   @db.Uuid
   productId Int
-  createdAt DateTime @default(now()) @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -122,7 +122,7 @@ model CartItem {
   userId    String   @db.Uuid
   productId Int
   quantity  Int
-  createdAt DateTime @default(now()) @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
 
   user    User    @relation(fields: [userId], references: [id])
   product Product @relation(fields: [productId], references: [id])
@@ -141,11 +141,11 @@ model PurchaseRequest {
   shippingFee    Int                   @default(3000)
   pointsUsed     Int                   @default(0) //이 구매에 사용된 포인트, 승인 시에만 실제 차감
   totalAmount    Int //‘상품합계+배송비'
-  refundedAt     DateTime?             @db.Timestamp(6) //승인 후 취소(환불) 처리 시각
+  refundedAt     DateTime?             @db.Timestamptz(6) //승인 후 취소(환불) 처리 시각
   refundedById   String?               @db.Uuid
   refundReason   String? //불량/오배송 등 사유
-  requestedAt    DateTime              @default(now()) @db.Timestamp(6)
-  resolvedAt     DateTime?             @db.Timestamp(6)
+  requestedAt    DateTime              @default(now()) @db.Timestamptz(6)
+  resolvedAt     DateTime?             @db.Timestamptz(6)
 
   company    Company @relation(fields: [companyId], references: [id])
   requester  User    @relation("PurchaseRequester", fields: [requesterId], references: [id])
@@ -175,8 +175,8 @@ model Budget {
   year      Int
   month     Int
   amount    Int //이번 달 예산 (수정 대상)
-  createdAt DateTime @default(now()) @db.Timestamp(6)
-  updatedAt DateTime @updatedAt @db.Timestamp(6)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
   company Company @relation(fields: [companyId], references: [id])
 
@@ -191,8 +191,8 @@ model PointTransaction {
   amount            Int //항상 양수. 잔액 계산 시 EARN은 +, USE는 -로 처리
   purchaseRequestId Int? //EARN/USE는 필수, ADMIN_ADJUST는 nullable 가능 (오류정정, 이벤트/프로모션, 특정 구매건 보정 등)
   description       String? //관리자 조정 사유
-  createdAt         DateTime  @default(now()) @db.Timestamp(6)
-  updatedAt         DateTime  @updatedAt @db.Timestamp(6)
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(6)
 
   user            User             @relation(fields: [userId], references: [id])
   company         Company          @relation(fields: [companyId], references: [id])
