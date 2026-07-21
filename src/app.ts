@@ -8,6 +8,10 @@ import morgan from 'morgan';
 import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
 import authRouter from './modules/auth/auth.router';
+import userRouter from './modules/user/user.router';
+import { membersRouter, budgetsRouter } from './modules/management/management.router';
+import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
+import purchaseRouter from './modules/purchase/purchase.router';
 
 const app = express();
 
@@ -32,6 +36,11 @@ app.use(cookieParser());
 
 // 라우터 등록
 app.use('/auth', authRouter);
+app.use('/users', userRouter);
+app.use('/members', membersRouter);
+app.use('/budgets', budgetsRouter);
+app.use('/purchase-requests', purchaseRequestRouter);
+app.use('/orders', purchaseRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: '안녕하세요' });
