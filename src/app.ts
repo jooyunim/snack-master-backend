@@ -7,6 +7,7 @@ import morgan from 'morgan';
 
 import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
+import authRouter from './modules/auth/auth.router';
 
 const app = express();
 
@@ -30,7 +31,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // 라우터 등록
-// app.use('/auth', authRouter);
+app.use('/auth', authRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: '안녕하세요' });
