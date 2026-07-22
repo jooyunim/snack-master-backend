@@ -4,12 +4,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
-import {
-  DEFAULT_PAGE_SIZE,
-  buildCursorOrderBy,
-  buildCursorPage,
-  buildCursorWhere,
-} from '../../lib/pagination';
+import { parsePagination, buildPageResult } from '../../lib/pagination';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 
@@ -50,8 +45,8 @@ interface ListProductsParams {
   categoryId?: number;
   search?: string;
   sort: ProductSort;
-  cursor?: string;
-  limit?: number;
+  page?: number;
+  pageSize?: number;
 }
 
 export const listProducts = async ({
@@ -59,44 +54,39 @@ export const listProducts = async ({
   categoryId,
   search,
   sort,
-  cursor,
-  limit = DEFAULT_PAGE_SIZE,
+  page,
+  pageSize,
 }: ListProductsParams) => {
   const { field: sortField, direction } = SORT_OPTIONS[sort];
   const categoryIds = categoryId
     ? await resolveCategoryIds(categoryId)
     : undefined;
+  const pagination = parsePagination(page, pageSize);
 
-  const baseWhere: Prisma.ProductWhereInput = {
+  const where: Prisma.ProductWhereInput = {
     companyId,
     deletedAt: null,
     ...(categoryIds && { categoryId: { in: categoryIds } }),
     ...(search && { name: { contains: search, mode: 'insensitive' } }),
   };
 
-  // 정렬 기준 컬럼이 동적으로 결정되므로 cursor where는 Prisma의 정적 타입과
-  // 맞지 않아 unknown으로 합성 후 캐스팅한다.
-  const where = {
-    ...baseWhere,
-    ...(cursor ? buildCursorWhere(sortField, direction, cursor) : {}),
-  } as Prisma.ProductWhereInput;
-
-  const [rows, totalCount] = await Promise.all([
+  const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: buildCursorOrderBy(sortField, direction) as Prisma.ProductOrderByWithRelationInput[],
-      take: limit + 1,
+      orderBy: { [sortField]: direction },
+      skip: pagination.skip,
+      take: pagination.take,
     }),
-    prisma.product.count({ where: baseWhere }),
+    prisma.product.count({ where }),
   ]);
 
-  const { items, nextCursor, hasNext } = buildCursorPage(rows, limit, sortField);
-
   return {
-    items: items.map(serializeProduct),
-    nextCursor,
-    hasNext,
-    totalCount,
+    ...buildPageResult(
+      items.map(serializeProduct),
+      total,
+      pagination.page,
+      pagination.pageSize
+    ),
   };
 };
 
@@ -255,44 +245,39 @@ export const deleteProduct = async (
 interface ListMyProductsParams {
   creatorId: string;
   companyId: number;
-  cursor?: string;
-  limit?: number;
+  page?: number;
+  pageSize?: number;
 }
 
 export const listMyProducts = async ({
   creatorId,
   companyId,
-  cursor,
-  limit = DEFAULT_PAGE_SIZE,
+  page,
+  pageSize,
 }: ListMyProductsParams) => {
   const { field: sortField, direction } = SORT_OPTIONS.recent;
+  const pagination = parsePagination(page, pageSize);
 
-  const baseWhere: Prisma.ProductWhereInput = {
+  const where: Prisma.ProductWhereInput = {
     creatorId,
     companyId,
     deletedAt: null,
   };
 
-  const where = {
-    ...baseWhere,
-    ...(cursor ? buildCursorWhere(sortField, direction, cursor) : {}),
-  } as Prisma.ProductWhereInput;
-
-  const [rows, totalCount] = await Promise.all([
+  const [items, total] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: buildCursorOrderBy(sortField, direction) as Prisma.ProductOrderByWithRelationInput[],
-      take: limit + 1,
+      orderBy: { [sortField]: direction },
+      skip: pagination.skip,
+      take: pagination.take,
     }),
-    prisma.product.count({ where: baseWhere }),
+    prisma.product.count({ where }),
   ]);
 
-  const { items, nextCursor, hasNext } = buildCursorPage(rows, limit, sortField);
-
-  return {
-    items: items.map(serializeProduct),
-    nextCursor,
-    hasNext,
-    totalCount,
-  };
+  return buildPageResult(
+    items.map(serializeProduct),
+    total,
+    pagination.page,
+    pagination.pageSize
+  );
 };
