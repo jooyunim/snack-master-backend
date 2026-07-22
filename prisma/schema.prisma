@@ -199,6 +199,16 @@ model PointTransaction {
   purchaseRequest PurchaseRequest? @relation(fields: [purchaseRequestId], references: [id])
 }
 
+model AuditLog {
+  id          Int      @id @default(autoincrement())
+  tableName   String
+  recordId    String   // User(uuid)와 나머지(int)를 모두 담기 위해 String으로
+  operation   String   // 'INSERT' | 'UPDATE' | 'DELETE'
+  oldData     Json?
+  newData     Json?
+  changedAt   DateTime @default(now()) @db.Timestamptz(6)
+}
+
 enum Role {
   USER
   ADMIN
