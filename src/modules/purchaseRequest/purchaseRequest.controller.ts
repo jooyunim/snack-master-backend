@@ -1,7 +1,6 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import * as purchaseRequestService from './purchaseRequest.service';
-
-import { NextFunction } from '@sentry/node/build/types/integrations/tracing/connect/vendored/internal-types';
+import { HttpError } from '../../middlewares/HttpError';
 
 export const getRequests = async (
   req: Request,
@@ -71,6 +70,30 @@ export const rejectRequest = async (
       resultMessage,
     });
     return res.status(200).json({ message: '반려되었습니다.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const createPurchaseRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { cartItemIds, requestMessage } = req.body;
+
+    if (!Array.isArray(cartItemIds) || cartItemIds.length === 0) {
+      throw new HttpError(400, '구매 요청할 상품을 선택해주세요.');
+    }
+
+    const data = await purchaseRequestService.createPurchaseRequest(
+      req.user!.userId,
+      req.user!.companyId,
+      cartItemIds,
+      requestMessage
+    );
+    res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);
   }
