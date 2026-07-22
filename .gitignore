@@ -22,3 +22,6 @@ Thumbs.db
 # editor
 .vscode/*
 !.vscode/settings.json
+
+# AI assistant context (not for repo)
+CLAUDE.md
