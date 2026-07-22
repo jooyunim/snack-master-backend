@@ -9,10 +9,14 @@ import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
 import authRouter from './modules/auth/auth.router';
 import userRouter from './modules/user/user.router';
-import { membersRouter, budgetsRouter } from './modules/management/management.router';
+import {
+  membersRouter,
+  budgetsRouter,
+} from './modules/management/management.router';
 import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
 import purchaseRouter from './modules/purchase/purchase.router';
 import productRouter from './modules/product/product.router';
+import categoryRouter from './modules/category/category.router';
 
 const app = express();
 
@@ -43,6 +47,7 @@ app.use('/budgets', budgetsRouter);
 app.use('/purchase-requests', purchaseRequestRouter);
 app.use('/orders', purchaseRouter);
 app.use('/products', productRouter);
+app.use('/categories', categoryRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: '안녕하세요' });

@@ -121,7 +121,28 @@ offset(page/pageSize) 방식. 목록형 엔드포인트(`GET /products`, `GET /p
 - soft delete (`deletedAt` 세팅) + 해당 상품의 CartItem/WishList는 함께 hard delete
 - 성공 시 `data: null`
 
+### `GET /categories` — 대분류/소분류 트리
+
+대분류(부모) 밑에 소분류(자식)가 중첩된 배열로 내려옴. 등록/수정 모달의 대분류·소분류 드롭다운은 이 응답 하나로 채우면 됨.
+
+응답 data:
+```json
+[
+  {
+    "id": 1,
+    "name": "과자",
+    "children": [
+      { "id": 4, "name": "짭짤한 과자" },
+      { "id": 5, "name": "달콤한 과자" },
+      { "id": 6, "name": "초콜릿" }
+    ]
+  }
+]
+```
+
+- 대분류 선택 시 `children` 배열로 소분류 옵션을 채우고, `POST /products`의 `categoryId`에는 **반드시 소분류(children 안의) id**를 넘겨야 함 (대분류 id는 400)
+- 쿼리 파라미터 없음, 페이지네이션 없음 (카테고리 전체 개수가 적어 한 번에 다 내려줌)
+
 ## 아직 미확정 / 확인 필요
 
-- 카테고리 목록을 내려주는 엔드포인트가 따로 없음 — 대분류/소분류 드롭다운 채우려면 카테고리 조회 API가 필요한데 아직 미구현 상태 (필요하면 알려주면 추가하겠음)
 - dimmed 오버레이 불투명도 등 모달 관련 수치는 Figma/CLAUDE.md에 명시값이 없어 FE에서 임의로 정해야 함
