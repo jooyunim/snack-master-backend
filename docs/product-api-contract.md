@@ -14,20 +14,21 @@
 
 ## 페이지네이션 공통 응답
 
-offset(page/pageSize) 방식. 목록형 엔드포인트(`GET /products`, `GET /products/mine`)는 `data`에 아래 형태를 공통으로 사용:
+cursor 방식 ("더보기" 로드용, 페이지 번호 UI 아님). 목록형 엔드포인트(`GET /products`, `GET /products/mine`)는 `data`에 아래 형태를 공통으로 사용:
 
 ```json
 {
   "items": [ /* Product[] */ ],
-  "total": 42,
-  "page": 1,
-  "pageSize": 20,
-  "totalPages": 3
+  "nextCursor": "eyJ2YWx1ZSI6IjIwMjYtMDct...",
+  "hasNext": true,
+  "totalCount": 42
 }
 ```
 
-- `page`, `pageSize` 쿼리 파라미터로 요청 (미지정 시 `page=1`, `pageSize=20`, 최대 `pageSize=50`)
-- `totalPages = Math.ceil(total / pageSize)` — "N of M" 형태 페이지네이션 UI에 바로 사용 가능
+- 첫 요청은 `cursor` 없이 호출. 응답의 `hasNext`가 `true`면 `nextCursor`를 다음 요청의 `cursor` 쿼리 파라미터로 그대로 넘겨서 "더보기" 호출
+- `limit` 쿼리 파라미터로 한 번에 가져올 개수 지정 (미지정 시 20, 최대 50)
+- `nextCursor`는 서버가 생성하는 불투명(opaque) 토큰 — 내부 구조를 파싱하거나 조립해서 쓰면 안 되고, 그대로 다음 요청에 되돌려주기만 하면 됨
+- `hasNext`가 `false`면 `nextCursor`는 `null` — "더보기" 버튼을 숨기면 됨
 
 ## Product 객체 형태
 
@@ -62,12 +63,12 @@ offset(page/pageSize) 방식. 목록형 엔드포인트(`GET /products`, `GET /p
 | `categoryId` | 카테고리 필터. 상위(대분류) id를 넘기면 하위 카테고리 상품까지 포함해서 조회됨 |
 | `search` | 상품명 부분일치 검색 |
 | `sort` | `recent`(기본, 최신순) / `sales`(판매순) / `priceAsc`(낮은가격순) / `priceDesc`(높은가격순) |
-| `page`, `pageSize` | 페이지네이션 |
+| `cursor`, `limit` | 페이지네이션 ("더보기") |
 
 ### `GET /products/mine` — 내 등록 내역
 
 - 로그인 유저가 등록한 상품만, 최신순 고정
-- 쿼리: `page`, `pageSize`만
+- 쿼리: `cursor`, `limit`만
 
 ### `GET /products/:id` — 상세
 

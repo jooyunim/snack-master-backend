@@ -4,7 +4,12 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
-import { parsePagination, buildPageResult } from '../../lib/pagination';
+import {
+  DEFAULT_PAGE_SIZE,
+  buildCursorOrderBy,
+  buildCursorPage,
+  buildCursorWhere,
+} from '../../lib/pagination';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 
@@ -45,8 +50,8 @@ interface ListProductsParams {
   categoryId?: number;
   search?: string;
   sort: ProductSort;
-  page?: number;
-  pageSize?: number;
+  cursor?: string;
+  limit?: number;
 }
 
 export const listProducts = async ({
@@ -54,39 +59,51 @@ export const listProducts = async ({
   categoryId,
   search,
   sort,
-  page,
-  pageSize,
+  cursor,
+  limit = DEFAULT_PAGE_SIZE,
 }: ListProductsParams) => {
   const { field: sortField, direction } = SORT_OPTIONS[sort];
   const categoryIds = categoryId
     ? await resolveCategoryIds(categoryId)
     : undefined;
-  const pagination = parsePagination(page, pageSize);
 
-  const where: Prisma.ProductWhereInput = {
+  const baseWhere: Prisma.ProductWhereInput = {
     companyId,
     deletedAt: null,
     ...(categoryIds && { categoryId: { in: categoryIds } }),
     ...(search && { name: { contains: search, mode: 'insensitive' } }),
   };
 
-  const [items, total] = await Promise.all([
+  // 정렬 기준 컬럼이 동적으로 결정되므로 cursor where는 Prisma의 정적 타입과
+  // 맞지 않아 unknown으로 합성 후 캐스팅한다.
+  const where = {
+    ...baseWhere,
+    ...(cursor ? buildCursorWhere(sortField, direction, cursor) : {}),
+  } as Prisma.ProductWhereInput;
+
+  const [rows, totalCount] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: { [sortField]: direction },
-      skip: pagination.skip,
-      take: pagination.take,
+      orderBy: buildCursorOrderBy(
+        sortField,
+        direction
+      ) as Prisma.ProductOrderByWithRelationInput[],
+      take: limit + 1,
     }),
-    prisma.product.count({ where }),
+    prisma.product.count({ where: baseWhere }),
   ]);
 
+  const { items, nextCursor, hasNext } = buildCursorPage(
+    rows,
+    limit,
+    sortField
+  );
+
   return {
-    ...buildPageResult(
-      items.map(serializeProduct),
-      total,
-      pagination.page,
-      pagination.pageSize
-    ),
+    items: items.map(serializeProduct),
+    nextCursor,
+    hasNext,
+    totalCount,
   };
 };
 
@@ -105,7 +122,9 @@ export const getProductById = async (id: number, companyId: number) => {
 
 // Category는 자기참조 2-depth 고정 — 상품은 하위(leaf) 카테고리에만 붙는다.
 const assertLeafCategory = async (categoryId: number) => {
-  const category = await prisma.category.findUnique({ where: { id: categoryId } });
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+  });
 
   if (!category) {
     throw new HttpError(400, '존재하지 않는 카테고리입니다.', 'categoryId');
@@ -139,7 +158,9 @@ export const createProductImageUploadUrl = async (
   companyId: number,
   filename: string
 ) => {
-  const extension = filename.includes('.') ? filename.split('.').pop() : undefined;
+  const extension = filename.includes('.')
+    ? filename.split('.').pop()
+    : undefined;
   const s3Key = `products/${companyId}/${crypto.randomUUID()}${extension ? `.${extension}` : ''}`;
 
   const command = new PutObjectCommand({
@@ -245,39 +266,51 @@ export const deleteProduct = async (
 interface ListMyProductsParams {
   creatorId: string;
   companyId: number;
-  page?: number;
-  pageSize?: number;
+  cursor?: string;
+  limit?: number;
 }
 
 export const listMyProducts = async ({
   creatorId,
   companyId,
-  page,
-  pageSize,
+  cursor,
+  limit = DEFAULT_PAGE_SIZE,
 }: ListMyProductsParams) => {
   const { field: sortField, direction } = SORT_OPTIONS.recent;
-  const pagination = parsePagination(page, pageSize);
 
-  const where: Prisma.ProductWhereInput = {
+  const baseWhere: Prisma.ProductWhereInput = {
     creatorId,
     companyId,
     deletedAt: null,
   };
 
-  const [items, total] = await Promise.all([
+  const where = {
+    ...baseWhere,
+    ...(cursor ? buildCursorWhere(sortField, direction, cursor) : {}),
+  } as Prisma.ProductWhereInput;
+
+  const [rows, totalCount] = await Promise.all([
     prisma.product.findMany({
       where,
-      orderBy: { [sortField]: direction },
-      skip: pagination.skip,
-      take: pagination.take,
+      orderBy: buildCursorOrderBy(
+        sortField,
+        direction
+      ) as Prisma.ProductOrderByWithRelationInput[],
+      take: limit + 1,
     }),
-    prisma.product.count({ where }),
+    prisma.product.count({ where: baseWhere }),
   ]);
 
-  return buildPageResult(
-    items.map(serializeProduct),
-    total,
-    pagination.page,
-    pagination.pageSize
+  const { items, nextCursor, hasNext } = buildCursorPage(
+    rows,
+    limit,
+    sortField
   );
+
+  return {
+    items: items.map(serializeProduct),
+    nextCursor,
+    hasNext,
+    totalCount,
+  };
 };

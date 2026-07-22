@@ -1,15 +1,23 @@
 import { Request, Response, NextFunction } from 'express';
 import * as productService from './product.service';
 import { HttpError } from '../../middlewares/HttpError';
+import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 
-const parseIntQuery = (raw: unknown) => {
+const MAX_PAGE_SIZE = 50;
+
+const parseLimit = (raw: unknown) => {
   const parsed = Number(raw);
-  return raw && !Number.isNaN(parsed) ? parsed : undefined;
+  if (!raw || Number.isNaN(parsed) || parsed <= 0) return DEFAULT_PAGE_SIZE;
+  return Math.min(parsed, MAX_PAGE_SIZE);
 };
 
-export const getProducts = async (req: Request, res: Response, next: NextFunction) => {
+export const getProducts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { categoryId, search, sort, page, pageSize } = req.query;
+    const { categoryId, search, sort, cursor, limit } = req.query;
 
     const sortValue = typeof sort === 'string' && sort ? sort : 'recent';
     if (!productService.isValidProductSort(sortValue)) {
@@ -19,10 +27,11 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
     const data = await productService.listProducts({
       companyId: req.user!.companyId,
       categoryId: categoryId ? Number(categoryId) : undefined,
-      search: typeof search === 'string' && search.trim() ? search.trim() : undefined,
+      search:
+        typeof search === 'string' && search.trim() ? search.trim() : undefined,
       sort: sortValue,
-      page: parseIntQuery(page),
-      pageSize: parseIntQuery(pageSize),
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      limit: parseLimit(limit),
     });
 
     res.status(200).json({ success: true, data });
@@ -31,7 +40,11 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
   }
 };
 
-export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
+export const getProductById = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -45,15 +58,19 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-export const getMyProducts = async (req: Request, res: Response, next: NextFunction) => {
+export const getMyProducts = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
-    const { page, pageSize } = req.query;
+    const { cursor, limit } = req.query;
 
     const data = await productService.listMyProducts({
       creatorId: req.user!.userId,
       companyId: req.user!.companyId,
-      page: parseIntQuery(page),
-      pageSize: parseIntQuery(pageSize),
+      cursor: typeof cursor === 'string' ? cursor : undefined,
+      limit: parseLimit(limit),
     });
 
     res.status(200).json({ success: true, data });
@@ -83,7 +100,11 @@ export const getProductImageUploadUrl = async (
   }
 };
 
-export const createProduct = async (req: Request, res: Response, next: NextFunction) => {
+export const createProduct = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { name, price, categoryId, linkUrl, s3Key, filename } = req.body;
 
@@ -120,7 +141,11 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const updateProduct = async (req: Request, res: Response, next: NextFunction) => {
+export const updateProduct = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
@@ -148,7 +173,11 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteProduct = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteProduct = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const id = Number(req.params.id);
     if (Number.isNaN(id)) {
