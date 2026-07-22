@@ -9,7 +9,11 @@ import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
 import authRouter from './modules/auth/auth.router';
 import userRouter from './modules/user/user.router';
-import { membersRouter, budgetsRouter } from './modules/management/management.router';
+import {
+  membersRouter,
+  budgetsRouter,
+} from './modules/management/management.router';
+import orderHistoryRouter from './modules/orderHistory/orderHistory.router';
 import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
 import purchaseRouter from './modules/purchase/purchase.router';
 
@@ -39,6 +43,7 @@ app.use('/auth', authRouter);
 app.use('/users', userRouter);
 app.use('/members', membersRouter);
 app.use('/budgets', budgetsRouter);
+app.use('/orders', orderHistoryRouter); // GET /orders, GET /orders/:id
 app.use('/purchase-requests', purchaseRequestRouter);
 app.use('/orders', purchaseRouter);
 
