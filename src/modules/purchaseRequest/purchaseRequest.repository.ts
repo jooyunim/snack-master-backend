@@ -1,5 +1,6 @@
 import prisma from '../../config/prisma';
 
+//구매 요청 목록
 export const findMany = async (companyId: number) => {
   return await prisma.purchaseRequest.findMany({
     where: {
@@ -21,6 +22,7 @@ export const findMany = async (companyId: number) => {
   });
 };
 
+//구매 요청 상세
 export const findById = async (id: number, companyId: number) => {
   return await prisma.purchaseRequest.findFirst({
     where: { id, companyId },
@@ -42,6 +44,7 @@ export const findById = async (id: number, companyId: number) => {
   });
 };
 
+//예산 날짜
 export const findBudgetByYearMonth = async (
   companyId: number,
   year: number,
@@ -52,6 +55,7 @@ export const findBudgetByYearMonth = async (
   });
 };
 
+//예산 계산용 승인된 구매 요청
 export const findAddApprovedRequests = async (
   companyId: number,
   start: Date,
@@ -72,6 +76,7 @@ export const findAddApprovedRequests = async (
   });
 };
 
+// 승인 반려 버튼 기능
 export const update = async ({
   id,
   companyId,

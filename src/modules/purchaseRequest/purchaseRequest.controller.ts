@@ -8,7 +8,7 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
-    const companyId = req.user.companyId;
+    const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(companyId);
     return res.status(200).json(requests);
   } catch (err) {
@@ -23,7 +23,7 @@ export const getRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    const companyId = req.user.companyId;
+    const companyId = req.user!.companyId;
     const request = await purchaseRequestService.getDetail(id, companyId);
     return res.status(200).json(request);
   } catch (err) {
@@ -38,8 +38,8 @@ export const approveRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    const companyId = req.user.companyId;
-    const resolverId = req.user.id;
+    const companyId = req.user!.companyId;
+    const resolverId = req.user!.userId;
     const { resultMessage } = req.body;
     await purchaseRequestService.approveRequest({
       id,
@@ -60,8 +60,8 @@ export const rejectRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    const companyId = req.user.companyId;
-    const resolverId = req.user.id;
+    const companyId = req.user!.companyId;
+    const resolverId = req.user!.userId;
     const { resultMessage } = req.body;
     await purchaseRequestService.rejectRequest({
       id,
