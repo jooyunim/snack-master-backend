@@ -16,6 +16,7 @@ import {
 import orderHistoryRouter from './modules/orderHistory/orderHistory.router';
 import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
 import purchaseRouter from './modules/purchase/purchase.router';
+import dashboardRouter from './modules/dashboard/dashboard.router';
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use('/budgets', budgetsRouter);
 app.use('/orders', orderHistoryRouter); // GET /orders, GET /orders/:id
 app.use('/purchase-requests', purchaseRequestRouter);
 app.use('/orders', purchaseRouter);
+app.use('/dashboard', dashboardRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: '안녕하세요' });
