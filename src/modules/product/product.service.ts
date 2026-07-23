@@ -25,8 +25,12 @@ export type ProductSort = keyof typeof SORT_OPTIONS;
 export const isValidProductSort = (value: string): value is ProductSort =>
   Object.prototype.hasOwnProperty.call(SORT_OPTIONS, value);
 
+// 시드 데이터가 s3Key에 완전한 외부 URL(picsum.photos)을 그대로 넣어두는 경우가 있어
+// 이미 URL 형태면 그대로 쓰고, 아니면 실제 S3 key로 간주해 URL을 조합한다.
 const buildImageUrl = (s3Key: string) =>
-  `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+  /^https?:\/\//.test(s3Key)
+    ? s3Key
+    : `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 
 const serializeProduct = <T extends { s3Key: string }>(product: T) => {
   const { s3Key, ...rest } = product;
