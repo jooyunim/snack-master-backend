@@ -13,8 +13,10 @@ import {
   membersRouter,
   budgetsRouter,
 } from './modules/management/management.router';
+import orderHistoryRouter from './modules/orderHistory/orderHistory.router';
 import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
 import purchaseRouter from './modules/purchase/purchase.router';
+import dashboardRouter from './modules/dashboard/dashboard.router';
 import productRouter from './modules/product/product.router';
 import categoryRouter from './modules/category/category.router';
 
@@ -44,8 +46,10 @@ app.use('/auth', authRouter);
 app.use('/users', userRouter);
 app.use('/members', membersRouter);
 app.use('/budgets', budgetsRouter);
+app.use('/orders', orderHistoryRouter); // GET /orders, GET /orders/:id
 app.use('/purchase-requests', purchaseRequestRouter);
 app.use('/orders', purchaseRouter);
+app.use('/dashboard', dashboardRouter);
 app.use('/products', productRouter);
 app.use('/categories', categoryRouter);
 
