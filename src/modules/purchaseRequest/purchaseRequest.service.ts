@@ -1,11 +1,17 @@
+import { PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import * as purchaseRequestRepository from './purchaseRequest.repository';
 
 const SHIPPING_FEE = 3000;
 
-const buildImageUrl = (s3Key: string) =>
-  `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+const buildImageUrl = (s3Key: string) => {
+  if (s3Key.startsWith('http://') || s3Key.startsWith('https://')) {
+    return s3Key;
+  }
+
+  return `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+};
 
 interface PurchaseRequestItem {
   id: number;
@@ -210,4 +216,119 @@ export const createPurchaseRequest = async (
   });
 
   return purchaseRequest;
+};
+
+export const getMyPurchaseRequests = async (
+  userId: string,
+  page: number,
+  pageSize: number
+) => {
+  const where = {
+    requesterId: userId,
+  };
+
+  const [purchaseRequests, total] = await prisma.$transaction([
+    prisma.purchaseRequest.findMany({
+      where,
+      include: {
+        items: true,
+      },
+      orderBy: {
+        requestedAt: 'desc',
+      },
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+
+    prisma.purchaseRequest.count({
+      where,
+    }),
+  ]);
+
+  return {
+    purchaseRequests,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
+};
+
+/**
+ * 내 구매 내역 상세 조회
+ */
+export const getMyPurchaseRequest = async (
+  userId: string,
+  purchaseRequestId: number
+) => {
+  const purchaseRequest = await prisma.purchaseRequest.findFirst({
+    where: {
+      id: purchaseRequestId,
+      requesterId: userId,
+    },
+    include: {
+      items: true,
+    },
+  });
+
+  if (!purchaseRequest) {
+    throw new HttpError(404, '구매 내역을 찾을 수 없습니다.');
+  }
+
+  return purchaseRequest;
+};
+
+/**
+ * 구매 요청 취소
+ */
+export const cancelMyPurchaseRequest = async (
+  userId: string,
+  purchaseRequestId: number
+) => {
+  const purchaseRequest = await prisma.purchaseRequest.findFirst({
+    where: {
+      id: purchaseRequestId,
+      requesterId: userId,
+    },
+    select: {
+      id: true,
+      status: true,
+    },
+  });
+
+  if (!purchaseRequest) {
+    throw new HttpError(404, '구매 요청을 찾을 수 없습니다.');
+  }
+
+  if (purchaseRequest.status !== PurchaseRequestStatus.PENDING) {
+    throw new HttpError(409, '대기 중인 구매 요청만 취소할 수 있습니다.');
+  }
+
+  const result = await prisma.purchaseRequest.updateMany({
+    where: {
+      id: purchaseRequestId,
+      requesterId: userId,
+      status: PurchaseRequestStatus.PENDING,
+    },
+    data: {
+      status: PurchaseRequestStatus.CANCELED,
+    },
+  });
+
+  if (result.count === 0) {
+    throw new HttpError(409, '이미 처리된 구매 요청입니다.');
+  }
+
+  const canceledPurchaseRequest = await prisma.purchaseRequest.findUnique({
+    where: {
+      id: purchaseRequestId,
+    },
+    include: {
+      items: true,
+    },
+  });
+
+  return canceledPurchaseRequest;
 };
