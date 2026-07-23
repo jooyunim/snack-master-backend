@@ -7,9 +7,10 @@ export const listCategories = async () => {
     select: {
       id: true,
       name: true,
+      slug: true,
       children: {
         orderBy: { id: 'asc' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, slug: true },
       },
     },
   });
