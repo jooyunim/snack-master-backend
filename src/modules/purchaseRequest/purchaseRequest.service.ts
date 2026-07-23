@@ -4,7 +4,9 @@ import { HttpError } from '../../middlewares/HttpError';
 const SHIPPING_FEE = 3000;
 
 const buildImageUrl = (s3Key: string) =>
-  `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
+  s3Key.startsWith('http://') || s3Key.startsWith('https://')
+    ? s3Key
+    : `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 
 export const createPurchaseRequest = async (
   userId: string,
@@ -20,18 +22,32 @@ export const createPurchaseRequest = async (
     where: { id: { in: cartItemIds }, userId },
     include: {
       product: {
-        select: { id: true, name: true, price: true, s3Key: true, deletedAt: true },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          s3Key: true,
+          deletedAt: true,
+        },
       },
     },
   });
 
   if (cartItems.length !== cartItemIds.length) {
-    throw new HttpError(400, '유효하지 않은 장바구니 항목이 포함되어 있습니다.');
+    throw new HttpError(
+      400,
+      '유효하지 않은 장바구니 항목이 포함되어 있습니다.'
+    );
   }
 
-  const deletedProduct = cartItems.find((item) => item.product.deletedAt !== null);
+  const deletedProduct = cartItems.find(
+    (item) => item.product.deletedAt !== null
+  );
   if (deletedProduct) {
-    throw new HttpError(400, `삭제된 상품이 포함되어 있습니다: ${deletedProduct.product.name}`);
+    throw new HttpError(
+      400,
+      `삭제된 상품이 포함되어 있습니다: ${deletedProduct.product.name}`
+    );
   }
 
   const itemsTotal = cartItems.reduce(
