@@ -1,12 +1,29 @@
+import { Prisma } from '@prisma/client';
 import prisma from '../../config/prisma';
 
+//구매 요청 목록 정렬 함수
+const getOrderBy = (
+  sortBy: string
+): Prisma.PurchaseRequestOrderByWithRelationInput => {
+  switch (sortBy) {
+    case 'price_asc':
+      return { totalAmount: 'asc' };
+    case 'price_desc':
+      return { totalAmount: 'desc' };
+    case 'recent':
+    default:
+      return { requestedAt: 'desc' };
+  }
+};
 //구매 요청 목록
-export const findMany = async (companyId: number) => {
+export const findMany = async (companyId: number, sortBy: string) => {
+  const orderBy = getOrderBy(sortBy);
   return await prisma.purchaseRequest.findMany({
     where: {
       companyId,
       status: 'PENDING',
     },
+    orderBy,
     include: {
       items: {
         select: {
@@ -32,7 +49,7 @@ export const findById = async (id: number, companyId: number) => {
           productName: true,
           price: true,
           quantity: true,
-          unit: true,
+          imageUrl: true,
         },
       },
       requester: {

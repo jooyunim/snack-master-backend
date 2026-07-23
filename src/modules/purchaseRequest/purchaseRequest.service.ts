@@ -13,22 +13,10 @@ const buildImageUrl = (s3Key: string) => {
   return `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 };
 
-interface PurchaseRequestItem {
-  id: number;
-  requestedAt: Date;
-  totalAmount: number;
-  requester: {
-    name: string;
-  };
-  items: {
-    productName: string;
-  }[];
-}
+export const getRequests = async (companyId: number, sortBy: string) => {
+  const requests = await purchaseRequestRepository.findMany(companyId, sortBy);
 
-export const getRequests = async (companyId: number) => {
-  const requests = await purchaseRequestRepository.findMany(companyId);
-
-  return requests.map((request: PurchaseRequestItem) => {
+  return requests.map((request) => {
     const itemSummary =
       request.items.length > 1
         ? `${request.items[0].productName} 외 ${request.items.length - 1}개`

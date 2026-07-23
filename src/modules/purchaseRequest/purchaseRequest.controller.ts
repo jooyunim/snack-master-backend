@@ -8,8 +8,12 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
+    const sortBy = (req.query.sortBy as string) || 'recent';
     const companyId = req.user!.companyId;
-    const requests = await purchaseRequestService.getRequests(companyId);
+    const requests = await purchaseRequestService.getRequests(
+      companyId,
+      sortBy
+    );
     return res.status(200).json(requests);
   } catch (err) {
     next(err);
