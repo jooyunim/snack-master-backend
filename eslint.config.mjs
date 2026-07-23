@@ -13,7 +13,7 @@ export default [
     languageOptions: {
       globals: globals.node,
       parserOptions: {
-        project: './tsconfig.json',
+        project: './tsconfig.eslint.json',
       },
     },
   },
