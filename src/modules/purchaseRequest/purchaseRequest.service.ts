@@ -124,10 +124,13 @@ export const getDetail = async (id: number, companyId: number) => {
   const remained = budget.amount - thisMonthSpent;
   const afterBudget = remained - request.totalAmount;
 
+  const isOverBudget = remained - request.totalAmount < 0;
+
   return {
     thisMonthSpent,
     remained,
     afterBudget,
+    isOverBudget,
     items: request.items,
     requesterName: request.requester.name,
     requestMessage: request.requestMessage,
