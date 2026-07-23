@@ -23,6 +23,8 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 
+dist/
+
 # AI assistant context (not for repo)
 CLAUDE.md
 DECISIONS.local.md
