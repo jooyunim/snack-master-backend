@@ -14,7 +14,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import app from '../../app';
 import prisma from '../../config/prisma';
 
-const JWT_SECRET = 'integration-test-secret';
+// jest.setup.ts에서 process.env.JWT_SECRET을 이 값으로 미리 고정해둠
+const JWT_SECRET = 'test-jwt-secret';
 
 const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
   jwt.sign(
@@ -38,10 +39,6 @@ const rawProduct = (overrides: Partial<Record<string, unknown>> = {}) => ({
   updatedAt: new Date('2026-01-01'),
   deletedAt: null,
   ...overrides,
-});
-
-beforeAll(() => {
-  process.env.JWT_ACCESS_SECRET = JWT_SECRET;
 });
 
 describe('GET /products', () => {
