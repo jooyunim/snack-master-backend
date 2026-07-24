@@ -20,18 +20,32 @@ export const instantPurchase = async (
     where: { id: { in: cartItemIds }, userId },
     include: {
       product: {
-        select: { id: true, name: true, price: true, s3Key: true, deletedAt: true },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          s3Key: true,
+          deletedAt: true,
+        },
       },
     },
   });
 
   if (cartItems.length !== cartItemIds.length) {
-    throw new HttpError(400, '유효하지 않은 장바구니 항목이 포함되어 있습니다.');
+    throw new HttpError(
+      400,
+      '유효하지 않은 장바구니 항목이 포함되어 있습니다.'
+    );
   }
 
-  const deletedProduct = cartItems.find((item) => item.product.deletedAt !== null);
+  const deletedProduct = cartItems.find(
+    (item) => item.product.deletedAt !== null
+  );
   if (deletedProduct) {
-    throw new HttpError(400, `삭제된 상품이 포함되어 있습니다: ${deletedProduct.product.name}`);
+    throw new HttpError(
+      400,
+      `삭제된 상품이 포함되어 있습니다: ${deletedProduct.product.name}`
+    );
   }
 
   const itemsTotal = cartItems.reduce(

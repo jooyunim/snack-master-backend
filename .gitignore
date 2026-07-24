@@ -22,3 +22,5 @@ Thumbs.db
 # editor
 .vscode/*
 !.vscode/settings.json
+
+dist/
