@@ -1,43 +1,159 @@
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import bcrypt from 'bcryptjs';
-import { User } from '@prisma/client';
+import { Role } from '@prisma/client';
 import jwt, { JwtPayload, verify } from 'jsonwebtoken';
 
-const filteredUserData = (user: User) => {
-  const { password, ...rest } = user;
-  return rest;
-};
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET 환경 변수가 설정되지 않았습니다.');
+}
 
-const newAccessToken = (userId: string) => {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET_KEY!, {
-    expiresIn: '15m',
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+const newAccessToken = (userId: string, role: Role, companyId: number) => {
+  const accessToken = jwt.sign({ userId, role, companyId }, JWT_SECRET, {
+    expiresIn: '1d',
   });
   return accessToken;
 };
 
 const newRefreshToken = async (userId: string) => {
-  const refreshToken = jwt.sign({ userId }, process.env.JWT_SECRET_KEY!, {
-    expiresIn: '1d',
+  const refreshToken = jwt.sign({ userId }, JWT_SECRET, {
+    expiresIn: '7d',
   });
 
   const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
 
-  return refreshTokenHash;
+  return { refreshToken, refreshTokenHash };
+};
+
+export const getEmailNameService = async (token: string) => {
+  if (!token) {
+    throw new HttpError(400, '유효한 초대 토큰이 존재하지 않습니다.');
+  }
+
+  const invitation = await prisma.invitation.findUnique({
+    where: { token },
+    select: { email: true, name: true, status: true, expiresAt: true },
+  });
+
+  if (!invitation) {
+    throw new HttpError(404, '일치하는 초대가 존재하지 않습니다.');
+  }
+
+  if (invitation.status !== 'PENDING') {
+    throw new HttpError(400, '초대가 이미 사용되었습니다.');
+  }
+
+  if (invitation.expiresAt < new Date()) {
+    throw new HttpError(400, '초대가 만료되었습니다.');
+  }
+
+  return { email: invitation.email, name: invitation.name };
 };
 
 export const signupUser = async (
   token: string,
   password: string,
   passwordConfirm: string
-) => {};
+) => {
+  if (!token) {
+    throw new HttpError(400, '유효한 초대 토큰이 존재하지 않습니다.');
+  }
+
+  if (!password || !passwordConfirm) {
+    throw new HttpError(400, '비밀번호와 비밀번호 확인이 필요합니다.');
+  }
+
+  if (password !== passwordConfirm) {
+    throw new HttpError(
+      400,
+      '비밀번호와 비밀번호 확인 값이 일치하지 않습니다.'
+    );
+  }
+
+  if (password.length < 8 || password.length > 20) {
+    throw new HttpError(400, '비밀번호는 8자 이상 20자 이하여야 합니다.');
+  }
+
+  if (
+    !/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(password)
+  ) {
+    throw new HttpError(
+      400,
+      '비밀번호는 영문, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다.'
+    );
+  }
+
+  const invitation = await prisma.invitation.findUnique({
+    where: { token },
+    include: { company: true },
+  });
+
+  if (!invitation) {
+    throw new HttpError(404, '일치하는 초대가 존재하지 않습니다.');
+  }
+  if (invitation.status !== 'PENDING') {
+    throw new HttpError(400, '초대가 이미 사용되었습니다.');
+  }
+  if (invitation.expiresAt < new Date()) {
+    throw new HttpError(400, '초대가 만료되었습니다.');
+  }
+  if (!invitation.company) {
+    throw new HttpError(404, '일치하는 회사가 존재하지 않습니다.');
+  }
+
+  //중복 이메일 검증
+  const existingUser = await prisma.user.findFirst({
+    where: { email: invitation.email, deletedAt: null },
+  });
+  if (existingUser) {
+    throw new HttpError(409, '이미 가입된 이메일입니다.');
+  }
+
+  //비밀번호 해싱
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  // 유저 생성 + 초대 수락을 한 트랜잭션으로 처리 (한쪽만 성공하는 불일치 방지)
+  const results = await prisma.$transaction([
+    prisma.user.create({
+      data: {
+        email: invitation.email,
+        password: hashedPassword,
+        name: invitation.name,
+        role: invitation.role,
+        companyId: invitation.company.id,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        companyId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    prisma.invitation.update({
+      where: { id: invitation.id },
+      data: { status: 'ACCEPTED' },
+    }),
+  ]);
+
+  const newUser = results[0];
+  return newUser;
+};
 
 export const loginUser = async (email: string, password: string) => {
   if (!email || !password) {
     throw new HttpError(400, '이메일 또는 비밀번호 값이 존재하지 않습니다.');
   }
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { email, deletedAt: null },
+    select: { id: true, role: true, companyId: true, password: true },
+  });
 
   if (!user) {
     const error = new HttpError(404, '일치하는 유저가 존재하지 않습니다.');
@@ -53,53 +169,60 @@ export const loginUser = async (email: string, password: string) => {
     throw error;
   }
 
-  const accessToken = newAccessToken(user.id);
-  const refreshTokenHash = await newRefreshToken(user.id);
+  const accessToken = newAccessToken(user.id, user.role, user.companyId);
+  const { refreshToken, refreshTokenHash } = await newRefreshToken(user.id);
 
   await prisma.user.update({
     where: { id: user.id },
     data: {
       refreshTokenHash,
-      refreshTokenExpiresAt: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000),
+      refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
     },
   });
 
   return {
-    user: filteredUserData(user),
+    user: { id: user.id, role: user.role, companyId: user.companyId },
     accessToken,
-    refreshTokenHash,
+    refreshToken,
   };
 };
 
 export const logoutUser = async (refreshToken: string) => {
   if (!refreshToken) {
-    const error = new HttpError(401, '리프레시 토큰이 존재하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(
+      401,
+      '리프레시 토큰이 존재하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   let decoded: string | JwtPayload;
 
   try {
-    decoded = verify(refreshToken, process.env.JWT_SECRET_KEY!);
+    decoded = verify(refreshToken, JWT_SECRET);
   } catch {
-    const error = new HttpError(401, '유효하지 않은 토큰입니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
   if (typeof decoded === 'string' || typeof decoded.userId !== 'string') {
-    const error = new HttpError(401, '유효하지 않은 토큰입니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
-  const user = await prisma.user.findUnique({ where: { id: decoded.userId } });
+  const user = await prisma.user.findFirst({
+    where: { id: decoded.userId, deletedAt: null },
+  });
 
-  if (!user) {
-    const error = new HttpError(401, '일치하는 유저가 존재하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+  if (!user || !user.refreshTokenHash) {
+    throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
+  }
+
+  const isMatch = await bcrypt.compare(refreshToken, user.refreshTokenHash);
+  if (!isMatch) {
+    throw new HttpError(
+      401,
+      '리프레시 토큰이 일치하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   await prisma.user.update({
@@ -110,59 +233,63 @@ export const logoutUser = async (refreshToken: string) => {
 
 export const refreshAccessToken = async (refreshToken: string) => {
   if (!refreshToken) {
-    const error = new HttpError(401, '리프레시 토큰이 존재하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(
+      401,
+      '리프레시 토큰이 존재하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   let decoded: string | JwtPayload;
 
   try {
-    decoded = verify(refreshToken, process.env.JWT_SECRET_KEY!);
+    decoded = verify(refreshToken, JWT_SECRET);
   } catch {
-    const error = new HttpError(401, '유효하지 않은 토큰입니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
   if (typeof decoded === 'string' || typeof decoded.userId !== 'string') {
-    const error = new HttpError(401, '유효하지 않은 토큰입니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
-  const user = await prisma.user.findFirst({ where: { id: decoded.userId } });
+  const user = await prisma.user.findFirst({
+    where: { id: decoded.userId, deletedAt: null },
+  });
 
   if (!user) {
-    const error = new HttpError(401, '일치하는 유저가 존재하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(
+      401,
+      '일치하는 유저가 존재하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   if (!user.refreshTokenHash) {
-    const error = new HttpError(401, '리프레시 토큰이 존재하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(
+      401,
+      '리프레시 토큰이 존재하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   const isMatch = await bcrypt.compare(refreshToken, user.refreshTokenHash);
 
   if (!isMatch) {
-    const error = new HttpError(401, '리프레시 토큰이 일치하지 않습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(
+      401,
+      '리프레시 토큰이 일치하지 않습니다.',
+      'refreshToken'
+    );
   }
 
   if (
     user.refreshTokenExpiresAt &&
     user.refreshTokenExpiresAt < new Date(Date.now())
   ) {
-    const error = new HttpError(401, '리프레시 토큰이 만료되었습니다.');
-    error.field = 'refreshToken';
-    throw error;
+    throw new HttpError(401, '리프레시 토큰이 만료되었습니다.', 'refreshToken');
   }
 
-  const accessToken = newAccessToken(user.id);
+  const accessToken = newAccessToken(user.id, user.role, user.companyId);
 
   return { accessToken };
 };
