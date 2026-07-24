@@ -3,6 +3,11 @@ import jwt from 'jsonwebtoken';
 import { Role } from '@prisma/client';
 import { HttpError } from './HttpError';
 
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET 환경 변수가 설정되지 않았습니다.');
+}
+
 interface JwtPayload {
   userId: string;
   role: Role;
@@ -10,17 +15,22 @@ interface JwtPayload {
 }
 
 // Authorization 헤더(Bearer) 또는 쿠키에서 토큰 꺼내서 검증
-export const authenticate = (req: Request, res: Response, next: NextFunction) => {
+export const authenticate = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   const authHeader = req.headers.authorization;
-  const token =
-    authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : req.cookies?.accessToken;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice(7)
+    : req.cookies?.accessToken;
 
   if (!token) {
     return next(new HttpError(401, '인증이 필요합니다.'));
   }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_ACCESS_SECRET!) as JwtPayload;
+    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
     req.user = {
       userId: payload.userId,
       role: payload.role,

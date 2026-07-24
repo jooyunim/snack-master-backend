@@ -5,6 +5,11 @@ import { instantPurchase } from './purchase.controller';
 
 const router = Router();
 
-router.post('/instant', authenticate, authorize(Role.ADMIN, Role.SUPER_ADMIN), instantPurchase);
+router.post(
+  '/instant',
+  authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
+  instantPurchase
+);
 
 export default router;

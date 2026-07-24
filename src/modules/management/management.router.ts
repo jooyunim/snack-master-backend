@@ -12,9 +12,24 @@ import { getBudget, updateBudget } from './budget.controller';
 const membersRouter = Router();
 
 membersRouter.get('/', authenticate, authorize(Role.SUPER_ADMIN), getMembers);
-membersRouter.post('/invite', authenticate, authorize(Role.SUPER_ADMIN), inviteMember);
-membersRouter.patch('/:id', authenticate, authorize(Role.SUPER_ADMIN), updateMemberRole);
-membersRouter.delete('/:id', authenticate, authorize(Role.SUPER_ADMIN), deleteMember);
+membersRouter.post(
+  '/invite',
+  authenticate,
+  authorize(Role.SUPER_ADMIN),
+  inviteMember
+);
+membersRouter.patch(
+  '/:id',
+  authenticate,
+  authorize(Role.SUPER_ADMIN),
+  updateMemberRole
+);
+membersRouter.delete(
+  '/:id',
+  authenticate,
+  authorize(Role.SUPER_ADMIN),
+  deleteMember
+);
 
 const budgetsRouter = Router();
 

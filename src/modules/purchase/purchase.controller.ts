@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import * as purchaseService from './purchase.service';
 import { HttpError } from '../../middlewares/HttpError';
 
-export const instantPurchase = async (req: Request, res: Response, next: NextFunction) => {
+export const instantPurchase = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { cartItemIds } = req.body;
 
