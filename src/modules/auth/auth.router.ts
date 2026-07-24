@@ -1,8 +1,15 @@
 import { Router } from 'express';
-import { login, logout, refresh, signup } from './auth.controller';
+import {
+  getEmailName,
+  login,
+  logout,
+  refresh,
+  signup,
+} from './auth.controller';
 
 const router = Router();
 
+router.get('/get-email-name', getEmailName);
 router.post('/signup', signup);
 router.post('/login', login);
 router.post('/logout', logout);
