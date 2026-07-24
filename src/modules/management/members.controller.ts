@@ -3,20 +3,33 @@ import { Role } from '@prisma/client';
 import * as membersService from './members.service';
 import { HttpError } from '../../middlewares/HttpError';
 
-export const getMembers = async (req: Request, res: Response, next: NextFunction) => {
+export const getMembers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const page = Math.max(1, parseInt(req.query.page as string) || 1);
     const pageSize = Math.min(50, parseInt(req.query.pageSize as string) || 10);
     const search = req.query.search as string | undefined;
 
-    const data = await membersService.getMembers(req.user!.companyId, page, pageSize, search);
+    const data = await membersService.getMembers(
+      req.user!.companyId,
+      page,
+      pageSize,
+      search
+    );
     res.status(200).json({ success: true, data });
   } catch (err) {
     next(err);
   }
 };
 
-export const updateMemberRole = async (req: Request, res: Response, next: NextFunction) => {
+export const updateMemberRole = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { id } = req.params;
     const { role } = req.body;
@@ -25,24 +38,41 @@ export const updateMemberRole = async (req: Request, res: Response, next: NextFu
       throw new HttpError(400, '유효하지 않은 권한입니다.');
     }
 
-    await membersService.updateMemberRole(req.user!.userId, req.user!.companyId, id, role);
+    await membersService.updateMemberRole(
+      req.user!.userId,
+      req.user!.companyId,
+      id,
+      role
+    );
     res.status(200).json({ success: true, data: null });
   } catch (err) {
     next(err);
   }
 };
 
-export const deleteMember = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { id } = req.params;
-    await membersService.deleteMember(req.user!.userId, req.user!.companyId, id);
+    await membersService.deleteMember(
+      req.user!.userId,
+      req.user!.companyId,
+      id
+    );
     res.status(200).json({ success: true, data: null });
   } catch (err) {
     next(err);
   }
 };
 
-export const inviteMember = async (req: Request, res: Response, next: NextFunction) => {
+export const inviteMember = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { email, name, role } = req.body;
 

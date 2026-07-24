@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import * as userService from './user.service';
 import { HttpError } from '../../middlewares/HttpError';
 
-export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
+export const getProfile = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const data = await userService.getUserProfile(req.user!.userId);
     res.status(200).json({ success: true, data });
@@ -11,7 +15,11 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-export const updatePassword = async (req: Request, res: Response, next: NextFunction) => {
+export const updatePassword = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { currentPassword, newPassword, newPasswordConfirm } = req.body;
 
@@ -22,14 +30,22 @@ export const updatePassword = async (req: Request, res: Response, next: NextFunc
       throw new HttpError(400, '새 비밀번호가 일치하지 않습니다.');
     }
 
-    await userService.updatePassword(req.user!.userId, currentPassword, newPassword);
+    await userService.updatePassword(
+      req.user!.userId,
+      currentPassword,
+      newPassword
+    );
     res.status(200).json({ success: true, data: null });
   } catch (err) {
     next(err);
   }
 };
 
-export const updateCorporateName = async (req: Request, res: Response, next: NextFunction) => {
+export const updateCorporateName = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const { name } = req.body;
 

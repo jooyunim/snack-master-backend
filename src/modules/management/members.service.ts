@@ -58,7 +58,8 @@ export const updateMemberRole = async (
   });
 
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
-  if (target.companyId !== companyId) throw new HttpError(403, '접근 권한이 없습니다.');
+  if (target.companyId !== companyId)
+    throw new HttpError(403, '접근 권한이 없습니다.');
 
   await prisma.user.update({
     where: { id: targetId },
@@ -80,7 +81,8 @@ export const deleteMember = async (
   });
 
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
-  if (target.companyId !== companyId) throw new HttpError(403, '접근 권한이 없습니다.');
+  if (target.companyId !== companyId)
+    throw new HttpError(403, '접근 권한이 없습니다.');
 
   // 실제 삭제 대신 deletedAt 기록 (소프트 삭제)
   await prisma.user.update({
@@ -103,7 +105,9 @@ export const inviteMember = async (
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) throw new HttpError(409, '이미 가입된 이메일입니다.');
 
-  const existingInvitation = await prisma.invitation.findUnique({ where: { email } });
+  const existingInvitation = await prisma.invitation.findUnique({
+    where: { email },
+  });
   if (existingInvitation?.status === 'PENDING') {
     throw new HttpError(409, '이미 초대된 이메일입니다.');
   }

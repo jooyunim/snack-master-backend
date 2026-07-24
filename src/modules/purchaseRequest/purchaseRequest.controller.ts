@@ -2,6 +2,83 @@ import { Request, Response, NextFunction } from 'express';
 import * as purchaseRequestService from './purchaseRequest.service';
 import { HttpError } from '../../middlewares/HttpError';
 
+export const getRequests = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const sortBy = (req.query.sortBy as string) || 'recent';
+    const companyId = req.user!.companyId;
+    const requests = await purchaseRequestService.getRequests(
+      companyId,
+      sortBy
+    );
+    return res.status(200).json(requests);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const getRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+    const companyId = req.user!.companyId;
+    const request = await purchaseRequestService.getDetail(id, companyId);
+    return res.status(200).json(request);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const approveRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+    const companyId = req.user!.companyId;
+    const resolverId = req.user!.userId;
+    const { resultMessage } = req.body;
+    await purchaseRequestService.approveRequest({
+      id,
+      companyId,
+      resolverId,
+      resultMessage,
+    });
+    return res.status(200).json({ message: '승인되었습니다.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const rejectRequest = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const id = Number(req.params.id);
+    const companyId = req.user!.companyId;
+    const resolverId = req.user!.userId;
+    const { resultMessage } = req.body;
+    await purchaseRequestService.rejectRequest({
+      id,
+      companyId,
+      resolverId,
+      resultMessage,
+    });
+    return res.status(200).json({ message: '반려되었습니다.' });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const createPurchaseRequest = async (
   req: Request,
   res: Response,
