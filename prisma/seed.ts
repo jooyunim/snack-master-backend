@@ -1,4 +1,9 @@
-import { PrismaClient, Role, PointType } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  PointType,
+  PurchaseRequestStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -556,6 +561,24 @@ const PRODUCTS = [
 const SEED_PASSWORD = '@a12345';
 const INITIAL_POINTS = 5000;
 const MONTHLY_BUDGET = 2_000_000;
+const SHIPPING_FEE = 3000;
+const EARN_RATE = 0.01; // 실결제액(포인트 사용분 제외)의 1% 적립
+
+function productSnapshot(productId: number, quantity: number) {
+  const p = PRODUCTS.find((pr) => pr.id === productId);
+  if (!p) throw new Error(`Unknown seed productId: ${productId}`);
+  return {
+    productId: p.id,
+    productName: p.name,
+    price: p.price,
+    imageUrl: `https://picsum.photos/seed/snack-${p.id}/400/400`,
+    quantity,
+  };
+}
+
+function itemsTotal(items: { price: number; quantity: number }[]) {
+  return items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+}
 
 async function clearDatabase() {
   await prisma.pointTransaction.deleteMany();
@@ -572,21 +595,21 @@ async function clearDatabase() {
 }
 
 async function resetSequences() {
-  await prisma.$executeRawUnsafe(`
-    SELECT setval(pg_get_serial_sequence('"Category"', 'id'), COALESCE((SELECT MAX(id) FROM "Category"), 1), true);
-  `);
-  await prisma.$executeRawUnsafe(`
-    SELECT setval(pg_get_serial_sequence('"Product"', 'id'), COALESCE((SELECT MAX(id) FROM "Product"), 1), true);
-  `);
-  await prisma.$executeRawUnsafe(`
-    SELECT setval(pg_get_serial_sequence('"Company"', 'id'), COALESCE((SELECT MAX(id) FROM "Company"), 1), true);
-  `);
-  await prisma.$executeRawUnsafe(`
-    SELECT setval(pg_get_serial_sequence('"Budget"', 'id'), COALESCE((SELECT MAX(id) FROM "Budget"), 1), true);
-  `);
-  await prisma.$executeRawUnsafe(`
-    SELECT setval(pg_get_serial_sequence('"PointTransaction"', 'id'), COALESCE((SELECT MAX(id) FROM "PointTransaction"), 1), true);
-  `);
+  const tables = [
+    'Category',
+    'Product',
+    'Company',
+    'Budget',
+    'PointTransaction',
+    'CartItem',
+    'PurchaseRequest',
+    'PurchaseRequestItem',
+  ];
+  for (const table of tables) {
+    await prisma.$executeRawUnsafe(`
+      SELECT setval(pg_get_serial_sequence('"${table}"', 'id'), COALESCE((SELECT MAX(id) FROM "${table}"), 1), true);
+    `);
+  }
 }
 
 async function main() {
@@ -673,15 +696,34 @@ async function main() {
     })),
   });
 
+  // ===== 예산 (Budget) =====
+  // 이번 달 기준 과거 5개월 + 이번 달, 총 6개월치 예산 생성
   const now = new Date();
-  await prisma.budget.create({
-    data: {
-      companyId: company.id,
-      year: now.getFullYear(),
-      month: now.getMonth() + 1,
-      amount: MONTHLY_BUDGET,
-    },
+  const BUDGET_MONTHS = 6;
+  // 기본 예산 대비 월별 배수(과거 → 현재). 매달 동일 금액이 아니라
+  // 실제로 있을 법한 증액/감액 이력을 표현하기 위함.
+  const BUDGET_MULTIPLIERS = [0.8, 0.8, 1, 1, 1.1, 1] as const;
+
+  const budgetsData = Array.from({ length: BUDGET_MONTHS }, (_, i) => {
+    const offset = BUDGET_MONTHS - 1 - i; // 오래된 달부터 순서대로
+    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+    const multiplier = BUDGET_MULTIPLIERS[i] ?? 1;
+    return {
+      year: d.getFullYear(),
+      month: d.getMonth() + 1,
+      amount: Math.round((MONTHLY_BUDGET * multiplier) / 10000) * 10000,
+    };
   });
+
+  await prisma.budget.createMany({
+    data: budgetsData.map((b) => ({
+      companyId: company.id,
+      year: b.year,
+      month: b.month,
+      amount: b.amount,
+    })),
+  });
+  console.log(`   Budgets: ${budgetsData.length}개월치 생성`);
 
   const allUsers = [superAdmin, ...admins, ...users];
   await prisma.pointTransaction.createMany({
@@ -694,6 +736,229 @@ async function main() {
       description: '시드 초기 포인트',
     })),
   });
+
+  // ===== 장바구니 (CartItem) =====
+  const cartItemsData = [
+    { user: users[0], productId: 1, quantity: 2 },
+    { user: users[0], productId: 3, quantity: 1 },
+    { user: users[0], productId: 5, quantity: 3 },
+    { user: users[1], productId: 16, quantity: 1 },
+    { user: users[1], productId: 32, quantity: 4 },
+    { user: users[2], productId: 39, quantity: 2 },
+    { user: users[2], productId: 50, quantity: 1 },
+    { user: users[3], productId: 56, quantity: 1 },
+  ];
+
+  await prisma.cartItem.createMany({
+    data: cartItemsData.map((c) => ({
+      userId: c.user.id,
+      productId: c.productId,
+      quantity: c.quantity,
+    })),
+  });
+  console.log(`   CartItems: ${cartItemsData.length}`);
+
+  // ===== 구매 요청 (PurchaseRequest / PurchaseRequestItem) =====
+  type PRSeed = {
+    requester: (typeof allUsers)[number];
+    resolver?: (typeof allUsers)[number];
+    status: PurchaseRequestStatus;
+    requestMessage?: string;
+    resultMessage?: string;
+    pointsUsed?: number;
+    items: { productId: number; quantity: number }[];
+    refund?: {
+      refundedBy: (typeof allUsers)[number];
+      refundReason: string;
+    };
+  };
+
+  const purchaseRequestSeeds: PRSeed[] = [
+    {
+      // PENDING: 아직 관리자 처리 전
+      requester: users[0],
+      status: PurchaseRequestStatus.PENDING,
+      requestMessage: '주간 간식 보충 요청입니다.',
+      items: [
+        { productId: 1, quantity: 2 },
+        { productId: 3, quantity: 1 },
+      ],
+    },
+    {
+      // APPROVED: 포인트 일부 사용 + 적립 발생
+      requester: users[1],
+      resolver: admins[0],
+      status: PurchaseRequestStatus.APPROVED,
+      requestMessage: '탕비실용 음료 구매 요청드립니다.',
+      resultMessage: '승인되었습니다.',
+      pointsUsed: 2000,
+      items: [
+        { productId: 16, quantity: 3 },
+        { productId: 32, quantity: 2 },
+      ],
+    },
+    {
+      // REJECTED: 예산 초과로 반려
+      requester: users[2],
+      resolver: admins[1],
+      status: PurchaseRequestStatus.REJECTED,
+      requestMessage: '라면 대량 구매 요청입니다.',
+      resultMessage: '이번 달 예산 초과로 반려합니다.',
+      items: [{ productId: 39, quantity: 5 }],
+    },
+    {
+      // CANCELED: 관리자 처리 전 요청자 본인이 철회
+      requester: users[3],
+      status: PurchaseRequestStatus.CANCELED,
+      requestMessage: '빵 구매 요청드립니다.',
+      items: [{ productId: 50, quantity: 2 }],
+    },
+    {
+      // APPROVED 후 REFUNDED: 승인 시 포인트 사용/적립 발생, 이후 환불 시 반대로 정정
+      requester: users[4],
+      resolver: admins[2],
+      status: PurchaseRequestStatus.REFUNDED,
+      requestMessage: '커피믹스 구매 요청드립니다.',
+      resultMessage: '승인되었습니다.',
+      pointsUsed: 1000,
+      items: [{ productId: 56, quantity: 1 }],
+      refund: {
+        refundedBy: admins[0],
+        refundReason: '제품 불량으로 환불 처리합니다.',
+      },
+    },
+    {
+      // PENDING
+      requester: users[5],
+      status: PurchaseRequestStatus.PENDING,
+      requestMessage: '과일 및 컵밥 구매 요청드립니다.',
+      items: [
+        { productId: 24, quantity: 3 },
+        { productId: 44, quantity: 1 },
+      ],
+    },
+    {
+      // APPROVED
+      requester: users[6],
+      resolver: admins[0],
+      status: PurchaseRequestStatus.APPROVED,
+      requestMessage: '생수 및 초코파이 구매 요청드립니다.',
+      resultMessage: '승인되었습니다.',
+      pointsUsed: 3000,
+      items: [
+        { productId: 32, quantity: 5 },
+        { productId: 1, quantity: 1 },
+      ],
+    },
+    {
+      // REJECTED
+      requester: users[7],
+      resolver: admins[1],
+      status: PurchaseRequestStatus.REJECTED,
+      requestMessage: '새우깡 대량 구매 요청입니다.',
+      resultMessage: '재고 부족으로 반려합니다.',
+      items: [{ productId: 3, quantity: 10 }],
+    },
+  ];
+
+  let createdCount = 0;
+  for (const seed of purchaseRequestSeeds) {
+    const itemSnapshots = seed.items.map((i) =>
+      productSnapshot(i.productId, i.quantity)
+    );
+    const totalAmount = itemsTotal(itemSnapshots) + SHIPPING_FEE;
+    const pointsUsed = seed.pointsUsed ?? 0;
+    const isResolved =
+      seed.status !== PurchaseRequestStatus.PENDING &&
+      seed.status !== PurchaseRequestStatus.CANCELED;
+    const isPaid =
+      seed.status === PurchaseRequestStatus.APPROVED ||
+      seed.status === PurchaseRequestStatus.REFUNDED;
+
+    const purchaseRequest = await prisma.purchaseRequest.create({
+      data: {
+        companyId: company.id,
+        requesterId: seed.requester.id,
+        resolverId: seed.resolver?.id ?? null,
+        status: seed.status,
+        requestMessage: seed.requestMessage,
+        resultMessage: seed.resultMessage,
+        shippingFee: SHIPPING_FEE,
+        pointsUsed: isPaid ? pointsUsed : 0,
+        totalAmount,
+        refundedAt: seed.refund ? new Date() : null,
+        refundedById: seed.refund?.refundedBy.id ?? null,
+        refundReason: seed.refund?.refundReason ?? null,
+        resolvedAt: isResolved ? new Date() : null,
+        items: {
+          create: itemSnapshots,
+        },
+      },
+    });
+    createdCount += 1;
+
+    if (isPaid) {
+      const paidAmount = totalAmount - pointsUsed;
+      const earnAmount = Math.round(paidAmount * EARN_RATE);
+
+      if (pointsUsed > 0) {
+        await prisma.pointTransaction.create({
+          data: {
+            userId: seed.requester.id,
+            companyId: company.id,
+            type: PointType.USE,
+            amount: pointsUsed,
+            purchaseRequestId: purchaseRequest.id,
+            description: '구매 승인 시 포인트 사용',
+          },
+        });
+      }
+
+      if (earnAmount > 0) {
+        await prisma.pointTransaction.create({
+          data: {
+            userId: seed.requester.id,
+            companyId: company.id,
+            type: PointType.EARN,
+            amount: earnAmount,
+            purchaseRequestId: purchaseRequest.id,
+            description: '구매 승인 시 실결제액 기준 적립',
+          },
+        });
+      }
+
+      if (seed.refund) {
+        // 환불 시 기존 적립/사용 포인트를 반대로 정정
+        if (earnAmount > 0) {
+          await prisma.pointTransaction.create({
+            data: {
+              userId: seed.requester.id,
+              companyId: company.id,
+              type: PointType.USE,
+              amount: earnAmount,
+              purchaseRequestId: purchaseRequest.id,
+              description: '환불로 인한 적립 포인트 회수',
+            },
+          });
+        }
+        if (pointsUsed > 0) {
+          await prisma.pointTransaction.create({
+            data: {
+              userId: seed.requester.id,
+              companyId: company.id,
+              type: PointType.EARN,
+              amount: pointsUsed,
+              purchaseRequestId: purchaseRequest.id,
+              description: '환불로 인한 사용 포인트 반환',
+            },
+          });
+        }
+      }
+    }
+  }
+  console.log(
+    `   PurchaseRequests: ${createdCount} (각 요청별 PurchaseRequestItem 포함)`
+  );
 
   await resetSequences();
 
