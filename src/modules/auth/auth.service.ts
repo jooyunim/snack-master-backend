@@ -62,27 +62,43 @@ export const signupUser = async (
     throw new HttpError(400, '유효한 초대 토큰이 존재하지 않습니다.');
   }
 
-  if (!password || !passwordConfirm) {
-    throw new HttpError(400, '비밀번호와 비밀번호 확인이 필요합니다.');
+  if (!password) {
+    throw new HttpError(400, '비밀번호 값이 필요합니다.', 'password');
+  }
+
+  if (!passwordConfirm) {
+    throw new HttpError(
+      400,
+      '비밀번호 확인 값이 필요합니다.',
+      'passwordConfirm'
+    );
   }
 
   if (password !== passwordConfirm) {
     throw new HttpError(
       400,
-      '비밀번호와 비밀번호 확인 값이 일치하지 않습니다.'
+      '비밀번호와 비밀번호 확인 값이 일치하지 않습니다.',
+      'passwordConfirm'
     );
   }
 
   if (password.length < 8 || password.length > 20) {
-    throw new HttpError(400, '비밀번호는 8자 이상 20자 이하여야 합니다.');
+    throw new HttpError(
+      400,
+      '비밀번호는 8자 이상 20자 이하여야 합니다.',
+      'password'
+    );
   }
 
   if (
-    !/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]+$/.test(password)
+    !/^(?=(?:.*[A-Za-z].*[0-9])|(?=.*[A-Za-z].*[@$!%*?&])|(?=.*[0-9].*[@$!%*?&]))[A-Za-z\d@$!%*?&]{8,}$/.test(
+      password
+    )
   ) {
     throw new HttpError(
       400,
-      '비밀번호는 영문, 숫자, 특수문자를 각각 하나 이상 포함해야 합니다.'
+      '비밀번호는 영문, 숫자, 특수문자 중 두 가지 이상 포함해야 합니다.',
+      'password'
     );
   }
 
@@ -152,11 +168,18 @@ export const loginUser = async (email: string, password: string) => {
 
   const user = await prisma.user.findFirst({
     where: { email, deletedAt: null },
-    select: { id: true, role: true, companyId: true, password: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      companyId: true,
+      password: true,
+    },
   });
 
   if (!user) {
-    const error = new HttpError(404, '일치하는 유저가 존재하지 않습니다.');
+    const error = new HttpError(404, '일치하는 이메일이 존재하지 않습니다.');
     error.field = 'email';
     throw error;
   }
@@ -181,7 +204,13 @@ export const loginUser = async (email: string, password: string) => {
   });
 
   return {
-    user: { id: user.id, role: user.role, companyId: user.companyId },
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      companyId: user.companyId,
+    },
     accessToken,
     refreshToken,
   };
@@ -229,6 +258,29 @@ export const logoutUser = async (refreshToken: string) => {
     where: { id: user.id },
     data: { refreshTokenHash: null, refreshTokenExpiresAt: null },
   });
+};
+
+export const getUserService = async (userId: string) => {
+  if (!userId) {
+    throw new HttpError(401, '인증이 필요합니다.');
+  }
+
+  const user = await prisma.user.findFirst({
+    where: { id: userId, deletedAt: null },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      companyId: true,
+    },
+  });
+
+  if (!user) {
+    throw new HttpError(404, '일치하는 유저가 존재하지 않습니다.');
+  }
+
+  return user;
 };
 
 export const refreshAccessToken = async (refreshToken: string) => {
