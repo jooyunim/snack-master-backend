@@ -341,7 +341,20 @@ export const refreshAccessToken = async (refreshToken: string) => {
     throw new HttpError(401, '리프레시 토큰이 만료되었습니다.', 'refreshToken');
   }
 
+  const {
+    refreshToken: newRefreshTokenData,
+    refreshTokenHash: newRefreshTokenHashData,
+  } = await newRefreshToken(user.id);
+
   const accessToken = newAccessToken(user.id, user.role, user.companyId);
 
-  return { accessToken };
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      refreshTokenHash: newRefreshTokenHashData,
+      refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+    },
+  });
+
+  return { accessToken, refreshToken: newRefreshTokenData };
 };

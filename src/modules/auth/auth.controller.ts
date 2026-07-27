@@ -100,7 +100,10 @@ export const refresh = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    const tokenData = await refreshAccessToken(refreshToken);
+    const { refreshToken: newRefreshToken, ...tokenData } =
+      await refreshAccessToken(refreshToken);
+
+    res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
     res.status(200).json({ success: true, data: tokenData });
   } catch (error) {
     next(error);
