@@ -258,14 +258,63 @@ export const getMyPurchaseRequest = async (
     },
     include: {
       items: true,
+      requester: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      resolver: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
   if (!purchaseRequest) {
-    throw new HttpError(404, '구매 내역을 찾을 수 없습니다.');
+    throw new HttpError(404, '구매 요청 내역을 찾을 수 없습니다.');
   }
 
-  return purchaseRequest;
+  const items = purchaseRequest.items.map((item) => ({
+    id: item.id,
+    productId: item.productId,
+    productName: item.productName,
+    imageUrl: item.imageUrl,
+    price: item.price,
+    quantity: item.quantity,
+    lineTotal: item.price * item.quantity,
+  }));
+
+  const totalQuantity = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const productAmount = items.reduce((sum, item) => sum + item.lineTotal, 0);
+
+  return {
+    id: purchaseRequest.id,
+    status: purchaseRequest.status,
+    items,
+    summary: {
+      itemCount: items.length,
+      totalQuantity,
+      productAmount,
+      shippingFee: purchaseRequest.shippingFee,
+      pointsUsed: purchaseRequest.pointsUsed,
+      totalAmount: purchaseRequest.totalAmount,
+    },
+    requestInfo: {
+      requestedAt: purchaseRequest.requestedAt,
+      requester: purchaseRequest.requester,
+      message: purchaseRequest.requestMessage,
+    },
+    resolutionInfo: {
+      resolvedAt: purchaseRequest.resolvedAt,
+      resolver: purchaseRequest.resolver,
+      status: purchaseRequest.status,
+      message: purchaseRequest.resultMessage,
+    },
+  };
 };
 
 /**
