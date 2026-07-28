@@ -96,6 +96,7 @@ model Category {
   id        Int      @id @default(autoincrement())
   parentId  Int? //self-referencing FK
   name      String
+  slug      String   @unique //FE 라우팅용 (예: /products?category=snack)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 

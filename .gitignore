@@ -24,3 +24,10 @@ Thumbs.db
 !.vscode/settings.json
 
 dist/
+
+# test coverage report
+coverage/
+
+# AI assistant context (not for repo)
+CLAUDE.md
+DECISIONS.local.md
