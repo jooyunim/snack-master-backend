@@ -46,6 +46,7 @@ export const findById = async (id: number, companyId: number) => {
     include: {
       items: {
         select: {
+          id: true,
           productName: true,
           price: true,
           quantity: true,

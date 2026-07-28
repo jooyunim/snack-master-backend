@@ -125,6 +125,7 @@ export const getDetail = async (id: number, companyId: number) => {
     lineTotal: item.price * item.quantity,
   }));
 
+  const orderAmount = request.totalAmount - request.shippingFee;
   return {
     thisMonthSpent,
     remained,
@@ -135,6 +136,8 @@ export const getDetail = async (id: number, companyId: number) => {
     requestMessage: request.requestMessage,
     requestedAt: request.requestedAt,
     requestAmount: request.totalAmount,
+    orderAmount,
+    shippingFee: request.shippingFee,
     id: request.id,
     status: request.status,
   };
