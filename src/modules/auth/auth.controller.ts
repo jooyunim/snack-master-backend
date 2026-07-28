@@ -69,7 +69,9 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    await logoutUser(refreshToken);
+    if (refreshToken) {
+      await logoutUser(refreshToken);
+    }
 
     res.clearCookie('refreshToken', {
       httpOnly: true,
