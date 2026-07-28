@@ -26,6 +26,7 @@ export const getProducts = async (
 
     const data = await productService.listProducts({
       companyId: req.user!.companyId,
+      userId: req.user!.userId,
       categoryId: categoryId ? Number(categoryId) : undefined,
       search:
         typeof search === 'string' && search.trim() ? search.trim() : undefined,

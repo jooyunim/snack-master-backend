@@ -57,6 +57,7 @@ describe('GET /products', () => {
   it('정상 토큰이면 200과 {success:true, data} 형태로 응답한다', async () => {
     (prisma.product.findMany as jest.Mock).mockResolvedValue([rawProduct()]);
     (prisma.product.count as jest.Mock).mockResolvedValue(1);
+    (prisma.wishList.findMany as jest.Mock).mockResolvedValue([]);
 
     const res = await request(app)
       .get('/products')
@@ -66,7 +67,23 @@ describe('GET /products', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.items).toHaveLength(1);
     expect(res.body.data.items[0]).not.toHaveProperty('s3Key');
+    expect(res.body.data.items[0].isWished).toBe(false);
     expect(res.body.data.totalCount).toBe(1);
+  });
+
+  it('로그인한 사용자가 찜한 상품이면 isWished가 true로 내려온다', async () => {
+    (prisma.product.findMany as jest.Mock).mockResolvedValue([rawProduct()]);
+    (prisma.product.count as jest.Mock).mockResolvedValue(1);
+    (prisma.wishList.findMany as jest.Mock).mockResolvedValue([
+      { productId: 1 },
+    ]);
+
+    const res = await request(app)
+      .get('/products')
+      .set('Authorization', `Bearer ${signToken()}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items[0].isWished).toBe(true);
   });
 
   it('유효하지 않은 sort 값이면 400', async () => {

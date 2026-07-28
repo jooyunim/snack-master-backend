@@ -19,6 +19,7 @@ import purchaseRouter from './modules/purchase/purchase.router';
 import dashboardRouter from './modules/dashboard/dashboard.router';
 import productRouter from './modules/product/product.router';
 import categoryRouter from './modules/category/category.router';
+import wishlistRouter from './modules/wishlist/wishlist.router';
 
 const app = express();
 
@@ -52,6 +53,7 @@ app.use('/orders', purchaseRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/products', productRouter);
 app.use('/categories', categoryRouter);
+app.use('/wishlist', wishlistRouter);
 
 app.get('/', (req, res) => {
   res.json({ message: '안녕하세요' });

@@ -10,6 +10,7 @@ import {
   buildCursorPage,
   buildCursorWhere,
 } from '../../lib/pagination';
+import { getWishedProductIds } from '../wishlist/wishlist.service';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 
@@ -32,9 +33,12 @@ const buildImageUrl = (s3Key: string) =>
     ? s3Key
     : `https://${process.env.AWS_S3_BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${s3Key}`;
 
-const serializeProduct = <T extends { s3Key: string }>(product: T) => {
+const serializeProduct = <T extends { s3Key: string }>(
+  product: T,
+  isWished = false
+) => {
   const { s3Key, ...rest } = product;
-  return { ...rest, imageUrl: buildImageUrl(s3Key) };
+  return { ...rest, imageUrl: buildImageUrl(s3Key), isWished };
 };
 
 // categoryId가 상위(부모) 카테고리면 하위 카테고리 상품까지 함께 조회한다.
@@ -51,6 +55,7 @@ const resolveCategoryIds = async (categoryId: number) => {
 
 interface ListProductsParams {
   companyId: number;
+  userId?: string;
   categoryId?: number;
   search?: string;
   sort: ProductSort;
@@ -60,6 +65,7 @@ interface ListProductsParams {
 
 export const listProducts = async ({
   companyId,
+  userId,
   categoryId,
   search,
   sort,
@@ -103,8 +109,15 @@ export const listProducts = async ({
     sortField
   );
 
+  const wishedIds = userId
+    ? await getWishedProductIds(
+        userId,
+        items.map((item) => item.id)
+      )
+    : new Set<number>();
+
   return {
-    items: items.map(serializeProduct),
+    items: items.map((item) => serializeProduct(item, wishedIds.has(item.id))),
     nextCursor,
     hasNext,
     totalCount,
@@ -121,6 +134,8 @@ export const getProductById = async (id: number, companyId: number) => {
     throw new HttpError(404, '상품을 찾을 수 없습니다.');
   }
 
+  // 상세 페이지는 하트 아이콘을 그리지 않아 isWished는 항상 false로 둔다
+  // (실제 상태는 GET /products, GET /wishlist에서 확인).
   return serializeProduct(product);
 };
 
@@ -243,6 +258,8 @@ export const updateProduct = async (input: UpdateProductInput) => {
     },
   });
 
+  // 수정 응답은 상품 등록/수정 모달에서만 쓰이고 하트 아이콘을 그리지 않아
+  // isWished는 항상 false로 둔다 (실제 상태는 GET /products, GET /wishlist에서 확인).
   return serializeProduct(updated);
 };
 
@@ -314,7 +331,7 @@ export const listMyProducts = async ({
   );
 
   return {
-    items: items.map(serializeProduct),
+    items: items.map((item) => serializeProduct(item)),
     nextCursor,
     hasNext,
     totalCount,

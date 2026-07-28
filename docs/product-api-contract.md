@@ -46,11 +46,14 @@ cursor 방식 ("더보기" 로드용, 페이지 번호 UI 아님). 목록형 엔
   "createdAt": "2026-07-22T00:00:00.000Z",
   "updatedAt": "2026-07-22T00:00:00.000Z",
   "deletedAt": null,
-  "imageUrl": "https://<bucket>.s3.<region>.amazonaws.com/products/1/xxxx.png"
+  "imageUrl": "https://<bucket>.s3.<region>.amazonaws.com/products/1/xxxx.png",
+  "isWished": false
 }
 ```
 
 `GET /products/:id`만 `category`(Category 객체)를 추가로 include해서 내려줌.
+
+`isWished`는 로그인한 사용자가 이 상품을 찜했는지 여부. **`GET /products` 목록에서만 실제 값을 계산해서 내려주고**, `GET /products/:id`(상세), `GET /products/mine`(내 등록 내역), `POST`/`PATCH /products`(등록/수정 응답)에서는 하트 아이콘을 그리지 않는 화면이라 항상 `false`로 고정되어 있음 — 실제 찜 여부가 필요하면 `GET /wishlist`로 별도 확인해야 함.
 
 ## 엔드포인트
 
@@ -143,6 +146,28 @@ cursor 방식 ("더보기" 로드용, 페이지 번호 UI 아님). 목록형 엔
 
 - 대분류 선택 시 `children` 배열로 소분류 옵션을 채우고, `POST /products`의 `categoryId`에는 **반드시 소분류(children 안의) id**를 넘겨야 함 (대분류 id는 400)
 - 쿼리 파라미터 없음, 페이지네이션 없음 (카테고리 전체 개수가 적어 한 번에 다 내려줌)
+
+### `GET /wishlist` — 내 찜 목록
+
+- 로그인 유저가 찜한 상품만, cursor 페이지네이션 공통 응답 형태와 동일 (`items`/`nextCursor`/`hasNext`/`totalCount`)
+- `items`는 Product 객체와 동일한 형태이고 `isWished`는 항상 `true`
+- 정렬은 찜한 시각(`WishList.createdAt`) 최신순 고정, sort 파라미터 없음
+
+### `POST /wishlist` — 찜 추가
+
+요청 body:
+```json
+{ "productId": 1 }
+```
+
+- 다른 회사 상품이거나 삭제된 상품이면 404
+- 이미 찜한 상품을 다시 요청해도 에러 없이 그대로 둠(멱등) — 하트 버튼 토글 UX에 맞춤
+- 성공 시 201 + `data: null`
+
+### `DELETE /wishlist/:productId` — 찜 해제
+
+- 찜하지 않은 상품을 지워도 에러 없이 그대로 둠(멱등)
+- 성공 시 200 + `data: null`
 
 ## 아직 미확정 / 확인 필요
 

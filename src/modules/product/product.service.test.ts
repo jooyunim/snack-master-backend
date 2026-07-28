@@ -158,6 +158,41 @@ describe('listProducts', () => {
     expect(result.items[0]).not.toHaveProperty('s3Key');
     expect(result.items[0].imageUrl).toContain('abc.png');
   });
+
+  it('userId를 주지 않으면 WishList를 조회하지 않고 isWished는 전부 false다', async () => {
+    (prisma.product.findMany as jest.Mock).mockResolvedValue([rawProduct()]);
+    (prisma.product.count as jest.Mock).mockResolvedValue(1);
+
+    const result = await listProducts({ companyId: 1, sort: 'recent' });
+
+    expect(prisma.wishList.findMany).not.toHaveBeenCalled();
+    expect(result.items[0].isWished).toBe(false);
+  });
+
+  it('userId를 주면 해당 유저가 찜한 상품만 isWished:true로 표시한다', async () => {
+    (prisma.product.findMany as jest.Mock).mockResolvedValue([
+      rawProduct({ id: 1 }),
+      rawProduct({ id: 2 }),
+    ]);
+    (prisma.product.count as jest.Mock).mockResolvedValue(2);
+    (prisma.wishList.findMany as jest.Mock).mockResolvedValue([
+      { productId: 1 },
+    ]);
+
+    const result = await listProducts({
+      companyId: 1,
+      userId: 'user-1',
+      sort: 'recent',
+    });
+
+    expect(prisma.wishList.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { userId: 'user-1', productId: { in: [1, 2] } },
+      })
+    );
+    expect(result.items.find((item) => item.id === 1)?.isWished).toBe(true);
+    expect(result.items.find((item) => item.id === 2)?.isWished).toBe(false);
+  });
 });
 
 describe('listMyProducts', () => {
