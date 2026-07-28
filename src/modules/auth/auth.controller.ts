@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import {
   getEmailNameService,
+  getUserService,
   loginUser,
   logoutUser,
   refreshAccessToken,
@@ -55,7 +56,7 @@ export const login = async (
     const { refreshToken, ...loginData } = await loginUser(email, password);
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-    res.status(200).json({ success: true, data: loginData });
+    res.status(200).json({ success: true, ...loginData });
   } catch (error) {
     next(error);
   }
@@ -68,11 +69,27 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    await logoutUser(refreshToken);
+    if (refreshToken) {
+      await logoutUser(refreshToken);
+    }
 
-    res.clearCookie('refreshToken');
+    res.clearCookie('refreshToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    });
 
     res.status(200).json({ success: true, message: '로그아웃 성공' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const user = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const getUser = await getUserService(req.user!.userId);
+    res.status(200).json({ success: true, user: getUser });
   } catch (error) {
     next(error);
   }
@@ -85,7 +102,10 @@ export const refresh = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
-    const tokenData = await refreshAccessToken(refreshToken);
+    const { refreshToken: newRefreshToken, ...tokenData } =
+      await refreshAccessToken(refreshToken);
+
+    res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
     res.status(200).json({ success: true, data: tokenData });
   } catch (error) {
     next(error);
