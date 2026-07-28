@@ -161,10 +161,12 @@ describe('listProducts', () => {
 });
 
 describe('listMyProducts', () => {
-  it('creatorId + companyId로 스코프하고 항상 최신순으로 정렬한다', async () => {
+  beforeEach(() => {
     (prisma.product.findMany as jest.Mock).mockResolvedValue([]);
     (prisma.product.count as jest.Mock).mockResolvedValue(0);
+  });
 
+  it('creatorId + companyId로 스코프하고, sort 미지정 시 기본값(최신순)으로 정렬한다', async () => {
     await listMyProducts({ creatorId: 'user-1', companyId: 1 });
 
     expect(prisma.product.findMany).toHaveBeenCalledWith(
@@ -175,6 +177,20 @@ describe('listMyProducts', () => {
           deletedAt: null,
         }),
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      })
+    );
+  });
+
+  it('sort를 지정하면 그 기준으로 정렬한다', async () => {
+    await listMyProducts({
+      creatorId: 'user-1',
+      companyId: 1,
+      sort: 'priceAsc',
+    });
+
+    expect(prisma.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [{ price: 'asc' }, { id: 'asc' }],
       })
     );
   });

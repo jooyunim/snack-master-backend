@@ -67,8 +67,8 @@ cursor 방식 ("더보기" 로드용, 페이지 번호 UI 아님). 목록형 엔
 
 ### `GET /products/mine` — 내 등록 내역
 
-- 로그인 유저가 등록한 상품만, 최신순 고정
-- 쿼리: `cursor`, `limit`만
+- 로그인 유저가 등록한 상품만
+- 쿼리: `sort`(기본 `recent`, `GET /products`와 동일한 4종), `cursor`, `limit`
 
 ### `GET /products/:id` — 상세
 

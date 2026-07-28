@@ -64,11 +64,17 @@ export const getMyProducts = async (
   next: NextFunction
 ) => {
   try {
-    const { cursor, limit } = req.query;
+    const { sort, cursor, limit } = req.query;
+
+    const sortValue = typeof sort === 'string' && sort ? sort : 'recent';
+    if (!productService.isValidProductSort(sortValue)) {
+      throw new HttpError(400, '유효하지 않은 정렬 기준입니다.');
+    }
 
     const data = await productService.listMyProducts({
       creatorId: req.user!.userId,
       companyId: req.user!.companyId,
+      sort: sortValue,
       cursor: typeof cursor === 'string' ? cursor : undefined,
       limit: parseLimit(limit),
     });

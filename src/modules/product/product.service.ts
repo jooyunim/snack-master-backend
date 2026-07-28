@@ -270,6 +270,7 @@ export const deleteProduct = async (
 interface ListMyProductsParams {
   creatorId: string;
   companyId: number;
+  sort?: ProductSort;
   cursor?: string;
   limit?: number;
 }
@@ -277,10 +278,11 @@ interface ListMyProductsParams {
 export const listMyProducts = async ({
   creatorId,
   companyId,
+  sort = 'recent',
   cursor,
   limit = DEFAULT_PAGE_SIZE,
 }: ListMyProductsParams) => {
-  const { field: sortField, direction } = SORT_OPTIONS.recent;
+  const { field: sortField, direction } = SORT_OPTIONS[sort];
 
   const baseWhere: Prisma.ProductWhereInput = {
     creatorId,

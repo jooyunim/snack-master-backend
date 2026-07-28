@@ -244,6 +244,14 @@ describe('GET /products/mine', () => {
       })
     );
   });
+
+  it('유효하지 않은 sort 값이면 400', async () => {
+    const res = await request(app)
+      .get('/products/mine?sort=invalid-sort')
+      .set('Authorization', `Bearer ${signToken()}`);
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('POST /products/image-upload-url', () => {
