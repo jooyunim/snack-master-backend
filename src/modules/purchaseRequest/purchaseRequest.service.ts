@@ -120,12 +120,17 @@ export const getDetail = async (id: number, companyId: number) => {
 
   const isOverBudget = remained - request.totalAmount < 0;
 
+  const itemsWithTotal = request.items.map((item) => ({
+    ...item,
+    lineTotal: item.price * item.quantity,
+  }));
+
   return {
     thisMonthSpent,
     remained,
     afterBudget,
     isOverBudget,
-    items: request.items,
+    items: itemsWithTotal,
     requesterName: request.requester.name,
     requestMessage: request.requestMessage,
     requestedAt: request.requestedAt,
