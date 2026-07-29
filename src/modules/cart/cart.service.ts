@@ -1,4 +1,4 @@
-import { Prisma, PurchaseRequestStatus, PointType } from '@prisma/client';
+import { PointType, Prisma, PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 
@@ -14,7 +14,7 @@ const buildImageUrl = (s3Key: string) => {
 
 export const getCartItems = async (userId: string) => {
   const cartItem = await prisma.cartItem.findMany({
-    where: { userId },
+    where: { userId, product: { deletedAt: null } },
     include: {
       product: {
         select: {
@@ -26,6 +26,7 @@ export const getCartItems = async (userId: string) => {
         },
       },
     },
+    orderBy: { createdAt: 'desc' },
   });
 
   const item = cartItem.map((i) => {
@@ -52,8 +53,11 @@ export const deleteCartItem = async (userId: string, cartItemIds: number[]) => {
   return deletedItems;
 };
 
+// 장바구니에서 구매(admin)
+export const purchaseItems = async () => {};
+
 //장바구니에서 구매요청(user)
-export const createPurchaseRequest = async (
+export const createPurchaseRequestService = async (
   userId: string,
   companyId: number,
   cartItemIds: number[],
@@ -124,7 +128,7 @@ export const createPurchaseRequest = async (
   return purchaseRequest;
 };
 
-export const instantPurchase = async (
+export const instantPurchaseService = async (
   userId: string,
   companyId: number,
   cartItemIds: number[]

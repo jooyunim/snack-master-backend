@@ -1,6 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import { HttpError } from '../../middlewares/HttpError';
-import * as cartService from './cart.service';
+import {
+  createPurchaseRequestService,
+  deleteCartItem,
+  getCartItems,
+  instantPurchaseService,
+} from './cart.service';
 
 export const getCart = async (
   req: Request,
@@ -8,9 +13,9 @@ export const getCart = async (
   next: NextFunction
 ) => {
   try {
-    const items = await cartService.getCartItems(req.user!.userId);
+    const items = await getCartItems(req.user!.userId);
 
-    res.status(200).json({ success: true, items });
+    res.status(200).json({ success: true, data: items });
   } catch (error) {
     next(error);
   }
@@ -24,11 +29,16 @@ export const deleteCart = async (
   try {
     const { cartItemIds } = req.body;
 
-    const data = await cartService.deleteCartItem(
-      req.user!.userId,
-      cartItemIds
-    );
-    res.status(200).json({ success: true, data });
+    if (!Array.isArray(cartItemIds) || cartItemIds.length === 0) {
+      throw new HttpError(400, '삭제할 상품을 선택해주세요.');
+    }
+
+    if (cartItemIds.every((id) => typeof id === 'number' && id > 0)) {
+      throw new HttpError(400, '유효하지 않은 상품입니다.');
+    }
+
+    const deletedData = await deleteCartItem(req.user!.userId, cartItemIds);
+    res.status(200).json({ success: true, data: deletedData });
   } catch (error) {
     next(error);
   }
@@ -46,7 +56,7 @@ export const createPurchaseRequest = async (
       throw new HttpError(400, '구매 요청할 상품을 선택해주세요.');
     }
 
-    const data = await cartService.createPurchaseRequest(
+    const data = await createPurchaseRequestService(
       req.user!.userId,
       req.user!.companyId,
       cartItemIds,
@@ -55,6 +65,18 @@ export const createPurchaseRequest = async (
     res.status(201).json({ success: true, data });
   } catch (err) {
     next(err);
+  }
+};
+
+export const purchase = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    res.status(200).json({ success: true, message: '구매 완료' });
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -70,7 +92,7 @@ export const instantPurchase = async (
       throw new HttpError(400, '구매할 상품을 선택해주세요.');
     }
 
-    const data = await cartService.instantPurchase(
+    const data = await instantPurchaseService(
       req.user!.userId,
       req.user!.companyId,
       cartItemIds
