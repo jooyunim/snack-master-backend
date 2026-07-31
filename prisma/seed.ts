@@ -727,12 +727,12 @@ async function main() {
   });
   console.log(`   Budgets: ${budgetsData.length}개월치 생성`);
 
-  const allUsers = [superAdmin, ...admins, ...users];
+  const pointRecipients = [superAdmin, ...admins];
   await prisma.pointTransaction.createMany({
-    data: allUsers.map((u) => ({
+    data: pointRecipients.map((u) => ({
       userId: u.id,
       companyId: company.id,
-      type: PointType.ADMIN_ADJUST,
+      type: PointType.ADMIN_CREDIT,
       amount: INITIAL_POINTS,
       purchaseRequestId: null,
       description: '시드 초기 포인트',
