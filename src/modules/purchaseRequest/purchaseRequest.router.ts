@@ -4,8 +4,6 @@ import { authenticate } from '../../middlewares/auth.middleware';
 
 const router = Router();
 
-// 사용자 구매 요청
-router.post('/', authenticate, purchaseRequestController.createPurchaseRequest);
 router.get(
   '/mine',
   authenticate,

@@ -15,11 +15,11 @@ import {
 } from './modules/management/management.router';
 import orderHistoryRouter from './modules/orderHistory/orderHistory.router';
 import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
-import purchaseRouter from './modules/purchase/purchase.router';
 import dashboardRouter from './modules/dashboard/dashboard.router';
 import productRouter from './modules/product/product.router';
 import categoryRouter from './modules/category/category.router';
 import wishlistRouter from './modules/wishlist/wishlist.router';
+import cartRouter from './modules/cart/cart.router';
 
 const app = express();
 
@@ -49,14 +49,14 @@ app.use('/members', membersRouter);
 app.use('/budgets', budgetsRouter);
 app.use('/orders', orderHistoryRouter); // GET /orders, GET /orders/:id
 app.use('/purchase-requests', purchaseRequestRouter);
-app.use('/orders', purchaseRouter);
 app.use('/dashboard', dashboardRouter);
 app.use('/products', productRouter);
 app.use('/categories', categoryRouter);
 app.use('/wishlist', wishlistRouter);
+app.use('/cart', cartRouter);
 
-app.get('/', (req, res) => {
-  res.json({ message: '안녕하세요' });
+app.get('/health', (req, res) => {
+  res.json({ message: '헬스 체크' });
 });
 
 app.use((req, res, next) => {

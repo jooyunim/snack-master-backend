@@ -79,30 +79,6 @@ export const rejectRequest = async (
   }
 };
 
-export const createPurchaseRequest = async (
-  req: Request,
-  res: Response,
-  next: NextFunction
-) => {
-  try {
-    const { cartItemIds, requestMessage } = req.body;
-
-    if (!Array.isArray(cartItemIds) || cartItemIds.length === 0) {
-      throw new HttpError(400, '구매 요청할 상품을 선택해주세요.');
-    }
-
-    const data = await purchaseRequestService.createPurchaseRequest(
-      req.user!.userId,
-      req.user!.companyId,
-      cartItemIds,
-      requestMessage
-    );
-    res.status(201).json({ success: true, data });
-  } catch (err) {
-    next(err);
-  }
-};
-
 export const getMyPurchaseRequests = async (
   req: Request,
   res: Response,
