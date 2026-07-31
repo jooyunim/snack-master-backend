@@ -96,6 +96,7 @@ model Category {
   id        Int      @id @default(autoincrement())
   parentId  Int? //self-referencing FK
   name      String
+  slug      String   @unique //FE 라우팅용 (예: /products?category=snack)
   createdAt DateTime @default(now()) @db.Timestamptz(6)
   updatedAt DateTime @updatedAt @db.Timestamptz(6)
 
@@ -189,7 +190,7 @@ model PointTransaction {
   companyId         Int //집계/리포트용
   type              PointType
   amount            Int //항상 양수. 잔액 계산 시 EARN은 +, USE는 -로 처리
-  purchaseRequestId Int? //EARN/USE는 필수, ADMIN_ADJUST는 nullable 가능 (오류정정, 이벤트/프로모션, 특정 구매건 보정 등)
+  purchaseRequestId Int? //EARN/USE는 필수, ADMIN_CREDIT/ADMIN_DEBIT는 nullable 가능 (오류정정, 이벤트/프로모션, 특정 구매건 보정 등)
   description       String? //관리자 조정 사유
   createdAt         DateTime  @default(now()) @db.Timestamptz(6)
   updatedAt         DateTime  @updatedAt @db.Timestamptz(6)
@@ -218,7 +219,8 @@ enum Role {
 enum PointType {
   EARN //승인 시 자동 적립, 실결제액 기준
   USE //승인 시 사용 차감
-  ADMIN_ADJUST //관리자 수동 조정
+  ADMIN_CREDIT //관리자 수동 조정 => 지급
+  ADMIN_DEBIT //관리자 수동 조정 => 차감
 }
 
 enum InvitationStatus {
