@@ -112,7 +112,7 @@ export const getDetail = async (id: number, companyId: number) => {
 
   const itemsWithTotal = request.items.map((item) => ({
     ...item,
-    lineTotal: item.price * item.quantity,
+    totalPrice: item.price * item.quantity,
   }));
 
   const orderAmount = request.totalAmount - request.shippingFee;
