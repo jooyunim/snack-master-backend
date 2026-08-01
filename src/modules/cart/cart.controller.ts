@@ -5,6 +5,7 @@ import {
   getCartItems,
   instantPurchaseService,
   purchaseItems,
+  updateCartItems,
 } from './cart.service';
 
 export const getCart = async (
@@ -16,6 +17,24 @@ export const getCart = async (
     const items = await getCartItems(req.user!.userId, req.user!.companyId);
 
     res.status(200).json({ success: true, data: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { cartItemIds, quantity } = req.body;
+    const result = await updateCartItems(
+      req.user!.userId,
+      cartItemIds,
+      quantity
+    );
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }

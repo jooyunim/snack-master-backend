@@ -37,3 +37,11 @@ export const purchaseSchema = z.object({
 export const instantPurchaseSchema = z.object({
   cartItemIds: cartItemIds('구매할 상품을 선택해주세요.'),
 });
+
+export const updateCartSchema = z.object({
+  cartItemIds: cartItemIds('수량을 변경할 상품을 선택해주세요.'),
+  quantity: z
+    .number({ error: 'quantity는 숫자여야 합니다.' })
+    .min(1, 'quantity는 1 이상이어야 합니다.')
+    .int({ error: 'quantity는 정수여야 합니다.' }),
+});

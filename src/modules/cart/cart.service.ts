@@ -60,6 +60,18 @@ export const getCartItems = async (userId: string, companyId: number) => {
   };
 };
 
+export const updateCartItems = async (
+  userId: string,
+  cartItemIds: number[],
+  quantity: number
+) => {
+  const updatedItems = await prisma.cartItem.updateMany({
+    where: { id: { in: cartItemIds }, userId },
+    data: { quantity },
+  });
+  return updatedItems;
+};
+
 export const deleteCartItem = async (userId: string, cartItemIds: number[]) => {
   const deletedItems = await prisma.cartItem.deleteMany({
     where: { id: { in: cartItemIds }, userId },
