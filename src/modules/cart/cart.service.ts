@@ -211,8 +211,11 @@ export const purchaseItems = async (
 
       const pointUsed = requestPointAmount;
 
-      //실제 결제 금액
+      //실제 총 결제 금액
       const paidAmount = totalAmount - pointUsed;
+
+      //배송비 뺀 실제 결제액
+      const paidAmountWithoutShippingFee = itemsTotal - pointUsed;
 
       //당월 예산 조회 => 부족하면 에러, 실 결제액만큼 예산 차감
       const now = new Date();
@@ -279,8 +282,8 @@ export const purchaseItems = async (
         });
       }
 
-      //적립액 계산 : 구매액의 1% 적립, 소수점 내림 적용
-      const reward = Math.floor(paidAmount * 0.01);
+      //적립액 계산 : 배송비 뺀 실제 결제액의 1% 적립, 소수점 내림 적용
+      const reward = Math.floor(paidAmountWithoutShippingFee * 0.01);
 
       //적립액 > 0 : pointTransaction (type : earn 생성)
       if (reward > 0) {

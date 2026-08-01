@@ -94,7 +94,6 @@ export const createPurchaseRequest = async (
   }
 };
 
-//구매 완료 후 list 보여줘야 하므로
 export const purchase = async (
   req: Request,
   res: Response,
@@ -103,6 +102,7 @@ export const purchase = async (
   try {
     const { cartItemIds, requestPointAmount } = req.body;
 
+    //구매 완료 후 list 보여줘야
     const result = await purchaseItems(
       req.user!.userId,
       req.user!.companyId,
