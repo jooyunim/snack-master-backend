@@ -45,3 +45,13 @@ export const updateCartSchema = z.object({
     .min(1, 'quantity는 1 이상이어야 합니다.')
     .int({ error: 'quantity는 정수여야 합니다.' }),
 });
+
+export const getCartOrderQuerySchema = z.object({
+  cartItemIds: z.string({ error: 'cartItemIds는 문자열이어야 합니다.' }).refine(
+    (value) => {
+      const ids = value.split(',').map(Number);
+      return ids.every((id) => !isNaN(id));
+    },
+    { message: 'cartItemIds는 숫자열이어야 합니다.' }
+  ),
+});

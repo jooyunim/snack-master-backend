@@ -79,6 +79,40 @@ export const deleteCartItem = async (userId: string, cartItemIds: number[]) => {
   return deletedItems;
 };
 
+export const getCartOrderItems = async (
+  userId: string,
+  cartItemIds: number[]
+) => {
+  const cartItems = await prisma.cartItem.findMany({
+    where: { id: { in: cartItemIds }, userId, product: { deletedAt: null } },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          s3Key: true,
+        },
+      },
+    },
+  });
+
+  const item = cartItems.map((i) => {
+    return {
+      id: i.id,
+      quantity: i.quantity,
+      productName: i.product.name,
+      price: i.product.price,
+      imageUrl: buildImageUrl(i.product.s3Key),
+    };
+  });
+
+  return {
+    cartItem: item,
+    shippingFee: SHIPPING_FEE,
+  };
+};
+
 // 장바구니에서 구매(admin)
 export const purchaseItems = async (
   userId: string,

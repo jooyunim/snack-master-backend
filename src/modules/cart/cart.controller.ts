@@ -3,6 +3,7 @@ import {
   createPurchaseRequestService,
   deleteCartItem,
   getCartItems,
+  getCartOrderItems,
   instantPurchaseService,
   purchaseItems,
   updateCartItems,
@@ -55,6 +56,24 @@ export const deleteCart = async (
   }
 };
 
+export const getCartOrder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { cartItemIds } = req.query;
+
+    const cartItemIdsArray = cartItemIds?.toString().split(',').map(Number);
+    const result = await getCartOrderItems(
+      req.user!.userId,
+      cartItemIdsArray ?? []
+    );
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
 export const createPurchaseRequest = async (
   req: Request,
   res: Response,
