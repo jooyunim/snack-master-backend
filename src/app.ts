@@ -20,6 +20,7 @@ import productRouter from './modules/product/product.router';
 import categoryRouter from './modules/category/category.router';
 import wishlistRouter from './modules/wishlist/wishlist.router';
 import cartRouter from './modules/cart/cart.router';
+import pointRouter from './modules/point/point.router';
 
 const app = express();
 
@@ -54,6 +55,7 @@ app.use('/products', productRouter);
 app.use('/categories', categoryRouter);
 app.use('/wishlist', wishlistRouter);
 app.use('/cart', cartRouter);
+app.use('/point', pointRouter);
 
 app.get('/health', (req, res) => {
   res.json({ message: '헬스 체크' });
