@@ -47,11 +47,31 @@ export const updateCartSchema = z.object({
 });
 
 export const getCartOrderQuerySchema = z.object({
-  cartItemIds: z.string({ error: 'cartItemIds는 문자열이어야 합니다.' }).refine(
-    (value) => {
-      const ids = value.split(',').map(Number);
-      return ids.every((id) => !isNaN(id));
-    },
-    { message: 'cartItemIds는 숫자열이어야 합니다.' }
-  ),
+  // 쿼리 ?cartItemIds=1,2,3 → 문자열이므로 body용 cartItemIds()와 다르게 작성
+  cartItemIds: z
+    .string({ error: 'cartItemIds는 문자열이어야 합니다.' })
+    .min(1, '주문할 상품을 선택해주세요.')
+    // refine: 통과(true) / 거부(false). 커스텀 규칙을 넣을 때 사용
+    .refine(
+      (value) => {
+        const parts = value.split(',').map((part) => part.trim());
+
+        // 빈 값: "", "1,", "1,,2"
+        if (parts.some((part) => part === '')) return false;
+
+        // 소수·음수·문자: "1.5", "-1", "abc" → 숫자만 허용
+        if (!parts.every((part) => /^\d+$/.test(part))) return false;
+
+        const ids = parts.map(Number);
+
+        // 0 거부 + Number.MAX_SAFE_INTEGER 초과 거부
+        if (!ids.every((id) => Number.isSafeInteger(id) && id >= 1)) {
+          return false;
+        }
+
+        // 중복: "1,1"
+        return new Set(ids).size === ids.length;
+      },
+      { message: 'cartItemIds는 중복 없는 양의 정수 목록이어야 합니다.' }
+    ),
 });
