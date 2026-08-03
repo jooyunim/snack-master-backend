@@ -11,7 +11,10 @@ export const orderHistoryRepository = {
     take: number,
     orderBy: Prisma.PurchaseRequestOrderByWithRelationInput
   ) => {
-    const where = { companyId, status: APPROVED };
+    const where: Prisma.PurchaseRequestWhereInput = {
+      companyId,
+      status: APPROVED,
+    };
 
     return Promise.all([
       prisma.purchaseRequest.findMany({
