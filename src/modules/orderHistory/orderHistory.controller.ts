@@ -1,9 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import * as orderHistoryService from './orderHistory.service';
 import { HttpError } from '../../middlewares/HttpError';
-
-// 허용 정렬: 최신순 / 낮은 금액순 / 높은 금액순
-const SORTS = ['latest', 'amountAsc', 'amountDesc'] as const;
+import { ORDER_SORTS, type OrderSort } from './orderHistory.constants';
 
 // 구매 내역 목록 조회
 export const getOrders = async (
@@ -17,7 +15,7 @@ export const getOrders = async (
     const pageSize = Math.min(50, parseInt(req.query.pageSize as string) || 10);
     const sort = (req.query.sort as string) || 'latest';
 
-    if (!SORTS.includes(sort as (typeof SORTS)[number])) {
+    if (!ORDER_SORTS.includes(sort as OrderSort)) {
       throw new HttpError(400, '유효하지 않은 정렬 기준입니다.');
     }
 
@@ -26,7 +24,7 @@ export const getOrders = async (
       req.user!.companyId,
       page,
       pageSize,
-      sort as (typeof SORTS)[number]
+      sort as OrderSort
     );
     res.status(200).json({ success: true, data });
   } catch (err) {

@@ -11,24 +11,34 @@ export const getSummary = async (companyId: number) => {
   const thisYearStart = new Date(year, 0, 1);
   const nextYearStart = new Date(year + 1, 0, 1);
   const lastYearStart = new Date(year - 1, 0, 1);
+  const lastMonth = month === 1 ? 12 : month - 1;
+  const lastMonthYear = month === 1 ? year - 1 : year;
   const [
     thisMonthExpense,
     lastMonthExpense,
     thisYearExpense,
     lastYearExpense,
     budget,
+    lastBudget,
   ] = await Promise.all([
     dashboardRepository.sumExpense(companyId, thisMonthStart, nextMonthStart),
     dashboardRepository.sumExpense(companyId, lastMonthStart, thisMonthStart),
     dashboardRepository.sumExpense(companyId, thisYearStart, nextYearStart),
     dashboardRepository.sumExpense(companyId, lastYearStart, thisYearStart),
     dashboardRepository.findCurrentBudget(companyId, year, month), // 이미 1~12
+    dashboardRepository.findCurrentBudget(companyId, lastMonthYear, lastMonth),
   ]);
 
+  const remainingBudget = budget?.amount ?? 0;
+  const lastMonthRemaining = lastBudget?.amount ?? null;
+
   return {
+    currentMonthBudget: remainingBudget + thisMonthExpense, // 이번 달 예산
+    lastMonthBudget: (lastMonthRemaining ?? 0) + lastMonthExpense, // 지난 달 예산
+    remainingBudget, // 이번 달 남은 예산
+    lastMonthRemaining, // 지난 달 남은 예산
     thisMonthExpense, // 이번 달 지출액
     lastMonthExpense, // 지난달 지출액
-    remainingBudget: budget?.amount ?? 0, // 이번 달 남은 예산
     thisYearExpense, // 올해 총 지출액
     lastYearExpense, // 지난해 지출액
   };

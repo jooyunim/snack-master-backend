@@ -1,11 +1,10 @@
 import { Prisma } from '@prisma/client';
 import { HttpError } from '../../middlewares/HttpError';
 import { orderHistoryRepository } from './orderHistory.repository';
-
-type Sort = 'latest' | 'amountAsc' | 'amountDesc';
+import type { OrderSort } from './orderHistory.constants';
 
 const getOrderBy = (
-  sort: Sort
+  sort: OrderSort
 ): Prisma.PurchaseRequestOrderByWithRelationInput => {
   switch (sort) {
     case 'amountAsc':
@@ -14,15 +13,8 @@ const getOrderBy = (
       return { totalAmount: 'desc' };
     case 'latest':
     default:
-      return { resolvedAt: 'desc' }; // 승인일 기준 최신순
+      return { resolvedAt: 'desc' };
   }
-};
-
-// 목록용 상품명 표시 (여러 개면 "첫 상품 외 N건")
-const formatProductName = (items: { productName: string }[]) => {
-  if (items.length === 0) return '';
-  if (items.length === 1) return items[0].productName;
-  return `${items[0].productName} 외 ${items.length - 1}건`;
 };
 
 // 구매 내역 목록 + 페이지네이션
@@ -30,7 +22,7 @@ export const getOrders = async (
   companyId: number,
   page: number,
   pageSize: number,
-  sort: Sort = 'latest'
+  sort: OrderSort = 'latest'
 ) => {
   const [rows, total] = await orderHistoryRepository.findMany(
     companyId,
@@ -45,7 +37,10 @@ export const getOrders = async (
     resolvedAt: row.resolvedAt, // 구매 승인일
     requesterName: row.requester.name, // 요청인
     resolverName: row.resolver?.name ?? null, // 담당자
-    productName: formatProductName(row.items),
+    items: row.items.map((item) => ({
+      productName: item.productName,
+    })),
+    totalQuantity: row.items.reduce((sum, item) => sum + item.quantity, 0),
     totalAmount: row.totalAmount,
     shippingFee: row.shippingFee,
     status: row.status,
