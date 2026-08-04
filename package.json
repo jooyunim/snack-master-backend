@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
     "format:check": "prettier . --check",
-    "db:seed": "prisma db seed"
+    "db:seed": "prisma db seed",
+    "ssh": "dotenv -- bash -c 'ssh -i \"$SSH_KEY_PATH\" -L 5432:$DB_HOST:5432 $EC2_USER@$EC2_HOST'"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx}": [
