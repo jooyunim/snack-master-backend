@@ -3,8 +3,10 @@ import {
   createPurchaseRequestService,
   deleteCartItem,
   getCartItems,
+  getCartOrderItems,
   instantPurchaseService,
   purchaseItems,
+  updateCartItems,
 } from './cart.service';
 
 export const getCart = async (
@@ -16,6 +18,24 @@ export const getCart = async (
     const items = await getCartItems(req.user!.userId, req.user!.companyId);
 
     res.status(200).json({ success: true, data: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { cartItemIds, quantity } = req.body;
+    const result = await updateCartItems(
+      req.user!.userId,
+      cartItemIds,
+      quantity
+    );
+    res.status(200).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -36,6 +56,24 @@ export const deleteCart = async (
   }
 };
 
+export const getCartOrder = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { cartItemIds } = req.query;
+
+    const cartItemIdsArray = cartItemIds?.toString().split(',').map(Number);
+    const result = await getCartOrderItems(
+      req.user!.userId,
+      cartItemIdsArray ?? []
+    );
+    res.status(200).json({ success: true, data: result });
+  } catch (error) {
+    next(error);
+  }
+};
 export const createPurchaseRequest = async (
   req: Request,
   res: Response,
@@ -56,7 +94,6 @@ export const createPurchaseRequest = async (
   }
 };
 
-//구매 완료 후 list 보여줘야 하므로
 export const purchase = async (
   req: Request,
   res: Response,
@@ -65,6 +102,7 @@ export const purchase = async (
   try {
     const { cartItemIds, requestPointAmount } = req.body;
 
+    //구매 완료 후 list 보여줘야
     const result = await purchaseItems(
       req.user!.userId,
       req.user!.companyId,
