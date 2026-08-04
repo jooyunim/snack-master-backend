@@ -101,53 +101,70 @@ export const inviteMember = async (
   name: string,
   role: Role
 ) => {
-  if (role === Role.SUPER_ADMIN) {
-    throw new HttpError(400, '최고 관리자 권한으로는 초대할 수 없습니다.');
-  }
-
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) throw new HttpError(409, '이미 가입된 이메일입니다.');
 
   const existingInvitation = await prisma.invitation.findUnique({
     where: { email },
   });
-  if (existingInvitation?.status === 'PENDING') {
-    throw new HttpError(409, '이미 초대된 이메일입니다.');
+
+  if (existingInvitation?.status === 'ACCEPTED') {
+    throw new HttpError(409, '이미 가입된 이메일입니다.');
   }
 
-  const token = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7일
+  if (existingInvitation && existingInvitation.companyId !== companyId) {
+    throw new HttpError(403, '접근 권한이 없습니다.');
+  }
 
-  await prisma.invitation.upsert({
-    where: { email },
-    create: { companyId, invitedById, email, name, role, token, expiresAt },
-    update: { name, role, token, status: 'PENDING', expiresAt },
-  });
+  const isValidPending =
+    existingInvitation?.status === 'PENDING' &&
+    existingInvitation.expiresAt >= new Date();
 
-  // 이메일 발송 로직은 추후 구현
+  let token: string;
 
-  //이메일 post 요청 시 이메일 발송
+  if (isValidPending && existingInvitation) {
+    // 유효한 초대: 기존 토큰·만료 유지, 메일만 재발송
+    token = existingInvitation.token;
+    await prisma.invitation.update({
+      where: { email },
+      data: { name, role },
+    });
+  } else {
+    // 신규 또는 만료: 토큰·만료 갱신 후 발송
+    token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7일
+
+    await prisma.invitation.upsert({
+      where: { email },
+      create: { companyId, invitedById, email, name, role, token, expiresAt },
+      update: {
+        invitedById,
+        name,
+        role,
+        token,
+        status: 'PENDING',
+        expiresAt,
+      },
+    });
+  }
 
   const fromEmail = process.env.FROM_EMAIL;
   if (!fromEmail) {
     throw new HttpError(500, 'FROM_EMAIL이 설정되지 않았습니다.');
   }
 
-  //forntend url 확인
   const frontendUrl = process.env.CLIENT_URL;
   if (!frontendUrl) {
     throw new HttpError(500, 'CLIENT_URL이 설정되지 않았습니다.');
   }
 
-  //이메일 발송
   const invitation = await esend.emails.send({
     from: fromEmail,
     to: email,
     subject: '가입 초대 이메일',
-    html: `<h1>WELCOME TO SNACK MASTER</h1> <h3>초대 링크를 클릭하여 회원가입을 진행해주세요.</h3> <a href="${process.env.FRONTEND_URL}/signup?token=${token}">초대 링크</a>`,
+    html: `<h1>WELCOME TO SNACK MASTER</h1> <h3>초대 링크를 클릭하여 회원가입을 진행해주세요.</h3> <a href="${frontendUrl}/signup?token=${token}">초대 링크</a>`,
   });
 
-  //이메일 발송 오류 처리
   if (invitation.error) {
     throw new HttpError(400, invitation.error.message);
   }
