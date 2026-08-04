@@ -60,11 +60,57 @@ export const getCartItems = async (userId: string, companyId: number) => {
   };
 };
 
+export const updateCartItems = async (
+  userId: string,
+  cartItemIds: number[],
+  quantity: number
+) => {
+  const updatedItems = await prisma.cartItem.updateMany({
+    where: { id: { in: cartItemIds }, userId },
+    data: { quantity },
+  });
+  return updatedItems;
+};
+
 export const deleteCartItem = async (userId: string, cartItemIds: number[]) => {
   const deletedItems = await prisma.cartItem.deleteMany({
     where: { id: { in: cartItemIds }, userId },
   });
   return deletedItems;
+};
+
+export const getCartOrderItems = async (
+  userId: string,
+  cartItemIds: number[]
+) => {
+  const cartItems = await prisma.cartItem.findMany({
+    where: { id: { in: cartItemIds }, userId, product: { deletedAt: null } },
+    include: {
+      product: {
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          s3Key: true,
+        },
+      },
+    },
+  });
+
+  const item = cartItems.map((i) => {
+    return {
+      id: i.id,
+      quantity: i.quantity,
+      productName: i.product.name,
+      price: i.product.price,
+      imageUrl: buildImageUrl(i.product.s3Key),
+    };
+  });
+
+  return {
+    cartItem: item,
+    shippingFee: SHIPPING_FEE,
+  };
 };
 
 // 장바구니에서 구매(admin)
@@ -165,8 +211,11 @@ export const purchaseItems = async (
 
       const pointUsed = requestPointAmount;
 
-      //실제 결제 금액
+      //실제 총 결제 금액
       const paidAmount = totalAmount - pointUsed;
+
+      //배송비 뺀 실제 결제액
+      const paidAmountWithoutShippingFee = itemsTotal - pointUsed;
 
       //당월 예산 조회 => 부족하면 에러, 실 결제액만큼 예산 차감
       const now = new Date();
@@ -233,8 +282,8 @@ export const purchaseItems = async (
         });
       }
 
-      //적립액 계산 : 구매액의 1% 적립, 소수점 내림 적용
-      const reward = Math.floor(paidAmount * 0.01);
+      //적립액 계산 : 배송비 뺀 실제 결제액의 1% 적립, 소수점 내림 적용
+      const reward = Math.floor(paidAmountWithoutShippingFee * 0.01);
 
       //적립액 > 0 : pointTransaction (type : earn 생성)
       if (reward > 0) {
