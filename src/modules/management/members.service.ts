@@ -33,7 +33,7 @@ export const getMembers = async (
         role: true,
         createdAt: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
