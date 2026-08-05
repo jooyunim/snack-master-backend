@@ -24,8 +24,8 @@ membersRouter.patch(
   authorize(Role.SUPER_ADMIN),
   updateMemberRole
 );
-membersRouter.delete(
-  '/:id',
+membersRouter.patch(
+  '/:id/delete',
   authenticate,
   authorize(Role.SUPER_ADMIN),
   deleteMember

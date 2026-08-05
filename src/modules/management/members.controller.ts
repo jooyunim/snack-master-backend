@@ -31,7 +31,7 @@ export const updateMemberRole = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { role } = req.body;
 
     if (!role || !Object.values(Role).includes(role)) {
@@ -56,7 +56,7 @@ export const deleteMember = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     await membersService.deleteMember(
       req.user!.userId,
       req.user!.companyId,
@@ -81,6 +81,10 @@ export const inviteMember = async (
     }
     if (!Object.values(Role).includes(role)) {
       throw new HttpError(400, '유효하지 않은 권한입니다.');
+    }
+
+    if (role === Role.SUPER_ADMIN) {
+      throw new HttpError(400, '최고 관리자 권한으로는 초대할 수 없습니다.');
     }
 
     const data = await membersService.inviteMember(
