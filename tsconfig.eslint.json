@@ -1,0 +1,7 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["src", "prisma.config.ts", "prisma/**/*.ts", "jest.setup.ts"],
+  "compilerOptions": {
+    "rootDir": "."
+  }
+}

@@ -1,0 +1,174 @@
+# 상품(Product) API 계약서
+
+작성자: 전강민 (상품 도메인) / 작성일: 2026-07-22
+대상: FE 상품 페이지 UI 구현 담당자 (임주연, Figma MCP)
+
+브랜치: `feat/product-domain` (BE), `dev` 대비 아직 PR 미병합
+
+## 공통 사항
+
+- 모든 엔드포인트는 `Authorization: Bearer <accessToken>` 필요 (`authenticate` 미들웨어) — 미인증 시 401
+- 응답 포맷: 성공 `{ success: true, data: ... }` / 실패 `{ success: false, message: string }`
+- 상품은 항상 로그인한 사용자의 `companyId`로 스코프됨 (회사 격리)
+- 이미지: 응답의 `imageUrl`은 서버가 조합해서 내려주는 절대 URL. DB의 `s3Key`는 응답에 노출되지 않음
+
+## 페이지네이션 공통 응답
+
+cursor 방식 ("더보기" 로드용, 페이지 번호 UI 아님). 목록형 엔드포인트(`GET /products`, `GET /products/mine`)는 `data`에 아래 형태를 공통으로 사용:
+
+```json
+{
+  "items": [ /* Product[] */ ],
+  "nextCursor": "eyJ2YWx1ZSI6IjIwMjYtMDct...",
+  "hasNext": true,
+  "totalCount": 42
+}
+```
+
+- 첫 요청은 `cursor` 없이 호출. 응답의 `hasNext`가 `true`면 `nextCursor`를 다음 요청의 `cursor` 쿼리 파라미터로 그대로 넘겨서 "더보기" 호출
+- `limit` 쿼리 파라미터로 한 번에 가져올 개수 지정 (미지정 시 20, 최대 50)
+- `nextCursor`는 서버가 생성하는 불투명(opaque) 토큰 — 내부 구조를 파싱하거나 조립해서 쓰면 안 되고, 그대로 다음 요청에 되돌려주기만 하면 됨
+- `hasNext`가 `false`면 `nextCursor`는 `null` — "더보기" 버튼을 숨기면 됨
+
+## Product 객체 형태
+
+```json
+{
+  "id": 1,
+  "categoryId": 12,
+  "creatorId": "uuid",
+  "companyId": 1,
+  "name": "허니버터칩",
+  "price": 1500,
+  "filename": "honey-butter-chip.png",
+  "linkUrl": "https://...",
+  "totalSold": 34,
+  "createdAt": "2026-07-22T00:00:00.000Z",
+  "updatedAt": "2026-07-22T00:00:00.000Z",
+  "deletedAt": null,
+  "imageUrl": "https://<bucket>.s3.<region>.amazonaws.com/products/1/xxxx.png",
+  "isWished": false
+}
+```
+
+`GET /products/:id`만 `category`(Category 객체)를 추가로 include해서 내려줌.
+
+`isWished`는 로그인한 사용자가 이 상품을 찜했는지 여부. **`GET /products` 목록에서만 실제 값을 계산해서 내려주고**, `GET /products/:id`(상세), `GET /products/mine`(내 등록 내역), `POST`/`PATCH /products`(등록/수정 응답)에서는 하트 아이콘을 그리지 않는 화면이라 항상 `false`로 고정되어 있음 — 실제 찜 여부가 필요하면 `GET /wishlist`로 별도 확인해야 함.
+
+## 엔드포인트
+
+### `GET /products` — 목록
+
+쿼리 파라미터 (전부 optional):
+
+| 파라미터 | 설명 |
+|---|---|
+| `categoryId` | 카테고리 필터. 상위(대분류) id를 넘기면 하위 카테고리 상품까지 포함해서 조회됨 |
+| `search` | 상품명 부분일치 검색 |
+| `sort` | `recent`(기본, 최신순) / `sales`(판매순) / `priceAsc`(낮은가격순) / `priceDesc`(높은가격순) |
+| `cursor`, `limit` | 페이지네이션 ("더보기") |
+
+### `GET /products/mine` — 내 등록 내역
+
+- 로그인 유저가 등록한 상품만
+- 쿼리: `sort`(기본 `recent`, `GET /products`와 동일한 4종), `cursor`, `limit`
+
+### `GET /products/:id` — 상세
+
+- 존재하지 않거나 삭제된 상품이면 404
+
+### `POST /products/image-upload-url` — 이미지 업로드 URL 발급
+
+등록 폼에서 이미지 선택 시 **가장 먼저 호출**. 등록 API(`POST /products`) 호출 전에 클라이언트가 반환받은 `uploadUrl`로 S3에 직접 PUT 업로드부터 해야 함.
+
+요청 body:
+```json
+{ "filename": "photo.png" }
+```
+
+응답 data:
+```json
+{
+  "uploadUrl": "https://<presigned-put-url>", // 5분간 유효
+  "s3Key": "products/1/uuid.png"
+}
+```
+
+클라이언트 흐름: `POST /products/image-upload-url` → 받은 `uploadUrl`로 이미지 파일을 `PUT` (body: 파일, Content-Type: 이미지 mime) → 성공하면 그 `s3Key`를 그대로 `POST /products`에 넘김.
+
+### `POST /products` — 등록
+
+요청 body:
+```json
+{
+  "name": "허니버터칩",
+  "price": 1500,
+  "categoryId": 12,
+  "linkUrl": "https://...",
+  "s3Key": "products/1/uuid.png",
+  "filename": "photo.png"
+}
+```
+
+- `categoryId`는 반드시 **하위(leaf) 카테고리**여야 함 (대분류 id를 넘기면 400)
+- 성공 시 201 + 생성된 Product
+
+### `PATCH /products/:id` — 수정
+
+- body는 위 등록 필드 중 바꿀 것만 partial로 전달 (전부 optional)
+- 권한: 본인이 등록한 상품이거나 `ADMIN`/`SUPER_ADMIN` — 아니면 403
+- 이미지 교체 시에도 `image-upload-url`을 다시 호출해서 새 `s3Key`를 받아야 함
+
+### `DELETE /products/:id` — 삭제
+
+- 권한은 PATCH와 동일
+- soft delete (`deletedAt` 세팅) + 해당 상품의 CartItem/WishList는 함께 hard delete
+- 성공 시 `data: null`
+
+### `GET /categories` — 대분류/소분류 트리
+
+대분류(부모) 밑에 소분류(자식)가 중첩된 배열로 내려옴. 등록/수정 모달의 대분류·소분류 드롭다운은 이 응답 하나로 채우면 됨.
+
+응답 data:
+```json
+[
+  {
+    "id": 1,
+    "name": "과자",
+    "children": [
+      { "id": 4, "name": "짭짤한 과자" },
+      { "id": 5, "name": "달콤한 과자" },
+      { "id": 6, "name": "초콜릿" }
+    ]
+  }
+]
+```
+
+- 대분류 선택 시 `children` 배열로 소분류 옵션을 채우고, `POST /products`의 `categoryId`에는 **반드시 소분류(children 안의) id**를 넘겨야 함 (대분류 id는 400)
+- 쿼리 파라미터 없음, 페이지네이션 없음 (카테고리 전체 개수가 적어 한 번에 다 내려줌)
+
+### `GET /wishlist` — 내 찜 목록
+
+- 로그인 유저가 찜한 상품만, cursor 페이지네이션 공통 응답 형태와 동일 (`items`/`nextCursor`/`hasNext`/`totalCount`)
+- `items`는 Product 객체와 동일한 형태이고 `isWished`는 항상 `true`
+- 정렬은 찜한 시각(`WishList.createdAt`) 최신순 고정, sort 파라미터 없음
+
+### `POST /wishlist` — 찜 추가
+
+요청 body:
+```json
+{ "productId": 1 }
+```
+
+- 다른 회사 상품이거나 삭제된 상품이면 404
+- 이미 찜한 상품을 다시 요청해도 에러 없이 그대로 둠(멱등) — 하트 버튼 토글 UX에 맞춤
+- 성공 시 201 + `data: null`
+
+### `DELETE /wishlist/:productId` — 찜 해제
+
+- 찜하지 않은 상품을 지워도 에러 없이 그대로 둠(멱등)
+- 성공 시 200 + `data: null`
+
+## 아직 미확정 / 확인 필요
+
+- dimmed 오버레이 불투명도 등 모달 관련 수치는 Figma/CLAUDE.md에 명시값이 없어 FE에서 임의로 정해야 함

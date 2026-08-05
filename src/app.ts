@@ -7,6 +7,20 @@ import morgan from 'morgan';
 
 import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
+import authRouter from './modules/auth/auth.router';
+import userRouter from './modules/user/user.router';
+import {
+  membersRouter,
+  budgetsRouter,
+} from './modules/management/management.router';
+import orderHistoryRouter from './modules/orderHistory/orderHistory.router';
+import purchaseRequestRouter from './modules/purchaseRequest/purchaseRequest.router';
+import dashboardRouter from './modules/dashboard/dashboard.router';
+import productRouter from './modules/product/product.router';
+import categoryRouter from './modules/category/category.router';
+import wishlistRouter from './modules/wishlist/wishlist.router';
+import cartRouter from './modules/cart/cart.router';
+import pointRouter from './modules/point/point.router';
 
 const app = express();
 
@@ -30,10 +44,21 @@ app.use(express.json());
 app.use(cookieParser());
 
 // 라우터 등록
-// app.use('/auth', authRouter);
+app.use('/auth', authRouter);
+app.use('/users', userRouter);
+app.use('/members', membersRouter);
+app.use('/budgets', budgetsRouter);
+app.use('/orders', orderHistoryRouter); // GET /orders, GET /orders/:id
+app.use('/purchase-requests', purchaseRequestRouter);
+app.use('/dashboard', dashboardRouter);
+app.use('/products', productRouter);
+app.use('/categories', categoryRouter);
+app.use('/wishlist', wishlistRouter);
+app.use('/cart', cartRouter);
+app.use('/point', pointRouter);
 
-app.get('/', (req, res) => {
-  res.json({ message: '안녕하세요' });
+app.get('/health', (req, res) => {
+  res.json({ message: '헬스 체크' });
 });
 
 app.use((req, res, next) => {

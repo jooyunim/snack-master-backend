@@ -6,7 +6,7 @@
     // Environment Settings
     "target": "ES2022",
     "module": "CommonJS",
-    "types": ["node"],
+    "types": ["node", "jest"],
 
     // Other Outputs
     "sourceMap": true,

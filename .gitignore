@@ -7,7 +7,7 @@ node_modules
 .env.production
 
 # Prisma
-prisma/migrations/
+# prisma/migrations/
 /generated/prisma
 
 # logs
@@ -22,3 +22,12 @@ Thumbs.db
 # editor
 .vscode/*
 !.vscode/settings.json
+
+dist/
+
+# test coverage report
+coverage/
+
+# AI assistant context (not for repo)
+CLAUDE.md
+DECISIONS.local.md
