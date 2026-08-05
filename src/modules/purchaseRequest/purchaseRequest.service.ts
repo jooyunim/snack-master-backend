@@ -128,11 +128,19 @@ export const getDetail = async (id: number, companyId: number) => {
 export const getMyPurchaseRequests = async (
   userId: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sortBy: string
 ) => {
   const where = {
     requesterId: userId,
   };
+
+  const orderBy =
+    sortBy === 'price_asc'
+      ? { totalAmount: 'asc' as const }
+      : sortBy === 'price_desc'
+        ? { totalAmount: 'desc' as const }
+        : { requestedAt: 'desc' as const };
 
   const [purchaseRequests, total] = await prisma.$transaction([
     prisma.purchaseRequest.findMany({
@@ -140,9 +148,7 @@ export const getMyPurchaseRequests = async (
       include: {
         items: true,
       },
-      orderBy: {
-        requestedAt: 'desc',
-      },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
