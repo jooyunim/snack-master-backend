@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import { Resend } from 'resend';
@@ -33,7 +33,7 @@ export const getMembers = async (
         role: true,
         createdAt: true,
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),
@@ -94,6 +94,20 @@ export const deleteMember = async (
   });
 };
 
+const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7일
+
+const assertInvitationOwnership = (
+  invitation: { status: string; companyId: number },
+  companyId: number
+) => {
+  if (invitation.status === 'ACCEPTED') {
+    throw new HttpError(400, '이미 가입된 이메일입니다.');
+  }
+  if (invitation.companyId !== companyId) {
+    throw new HttpError(403, '접근 권한이 없습니다.');
+  }
+};
+
 export const inviteMember = async (
   companyId: number,
   invitedById: string,
@@ -101,53 +115,117 @@ export const inviteMember = async (
   name: string,
   role: Role
 ) => {
-  if (role === Role.SUPER_ADMIN) {
-    throw new HttpError(400, '최고 관리자 권한으로는 초대할 수 없습니다.');
-  }
-
   const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) throw new HttpError(409, '이미 가입된 이메일입니다.');
+  if (existingUser) throw new HttpError(400, '이미 가입된 이메일입니다.');
 
   const existingInvitation = await prisma.invitation.findUnique({
     where: { email },
   });
-  if (existingInvitation?.status === 'PENDING') {
-    throw new HttpError(409, '이미 초대된 이메일입니다.');
+
+  let token: string;
+
+  if (existingInvitation) {
+    assertInvitationOwnership(existingInvitation, companyId);
+
+    const isValidPending =
+      existingInvitation.status === 'PENDING' &&
+      existingInvitation.expiresAt >= new Date();
+
+    if (isValidPending) {
+      // 유효한 초대: 기존 토큰·만료 유지, 메일만 재발송
+      token = existingInvitation.token;
+      await prisma.invitation.update({
+        where: { email },
+        data: { name, role },
+      });
+    } else {
+      // 만료 등: 토큰·만료 갱신 후 발송
+      token = crypto.randomUUID();
+      await prisma.invitation.update({
+        where: { email },
+        data: {
+          invitedById,
+          name,
+          role,
+          token,
+          status: 'PENDING',
+          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        },
+      });
+    }
+  } else {
+    // 신규: create. 동시 초대는 email unique로 막고 소유권을 재확인
+    token = crypto.randomUUID();
+    try {
+      await prisma.invitation.create({
+        data: {
+          companyId,
+          invitedById,
+          email,
+          name,
+          role,
+          token,
+          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+        },
+      });
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        error.code !== 'P2002'
+      ) {
+        throw error;
+      }
+
+      const conflicted = await prisma.invitation.findUnique({
+        where: { email },
+      });
+      if (!conflicted) throw error;
+
+      assertInvitationOwnership(conflicted, companyId);
+
+      const isValidPending =
+        conflicted.status === 'PENDING' && conflicted.expiresAt >= new Date();
+
+      if (isValidPending) {
+        token = conflicted.token;
+        await prisma.invitation.update({
+          where: { email },
+          data: { name, role },
+        });
+      } else {
+        token = crypto.randomUUID();
+        await prisma.invitation.update({
+          where: { email },
+          data: {
+            invitedById,
+            name,
+            role,
+            token,
+            status: 'PENDING',
+            expiresAt: new Date(Date.now() + INVITE_TTL_MS),
+          },
+        });
+      }
+    }
   }
-
-  const token = crypto.randomUUID();
-  const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7); // 7일
-
-  await prisma.invitation.upsert({
-    where: { email },
-    create: { companyId, invitedById, email, name, role, token, expiresAt },
-    update: { name, role, token, status: 'PENDING', expiresAt },
-  });
-
-  // 이메일 발송 로직은 추후 구현
-
-  //이메일 post 요청 시 이메일 발송
 
   const fromEmail = process.env.FROM_EMAIL;
   if (!fromEmail) {
     throw new HttpError(500, 'FROM_EMAIL이 설정되지 않았습니다.');
   }
 
-  //forntend url 확인
   const frontendUrl = process.env.CLIENT_URL;
   if (!frontendUrl) {
     throw new HttpError(500, 'CLIENT_URL이 설정되지 않았습니다.');
   }
 
-  //이메일 발송
   const invitation = await esend.emails.send({
     from: fromEmail,
     to: email,
     subject: '가입 초대 이메일',
-    html: `<h1>WELCOME TO SNACK MASTER</h1> <h3>초대 링크를 클릭하여 회원가입을 진행해주세요.</h3> <a href="${process.env.FRONTEND_URL}/signup?token=${token}">초대 링크</a>`,
+    html: `<h1>WELCOME TO SNACK MASTER</h1> <h3>초대 링크를 클릭하여 회원가입을 진행해주세요.</h3> <a href="${frontendUrl}/signup?token=${token}">초대 링크</a>`,
   });
 
-  //이메일 발송 오류 처리
   if (invitation.error) {
     throw new HttpError(400, invitation.error.message);
   }
