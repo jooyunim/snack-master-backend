@@ -102,14 +102,14 @@ export const inviteMember = async (
   role: Role
 ) => {
   const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) throw new HttpError(409, '이미 가입된 이메일입니다.');
+  if (existingUser) throw new HttpError(400, '이미 가입된 이메일입니다.');
 
   const existingInvitation = await prisma.invitation.findUnique({
     where: { email },
   });
 
   if (existingInvitation?.status === 'ACCEPTED') {
-    throw new HttpError(409, '이미 가입된 이메일입니다.');
+    throw new HttpError(400, '이미 가입된 이메일입니다.');
   }
 
   if (existingInvitation && existingInvitation.companyId !== companyId) {
