@@ -44,14 +44,15 @@ export const approveRequest = async (
     const id = Number(req.params.id);
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
-    const { resultMessage } = req.body;
-    await purchaseRequestService.approveRequest({
+    const { resultMessage, requestPointAmount } = req.body;
+    const result = await purchaseRequestService.approveRequest({
       id,
       companyId,
       resolverId,
       resultMessage,
+      requestPointAmount,
     });
-    return res.status(200).json({ message: '승인되었습니다.' });
+    return res.status(200).json(result);
   } catch (err) {
     next(err);
   }

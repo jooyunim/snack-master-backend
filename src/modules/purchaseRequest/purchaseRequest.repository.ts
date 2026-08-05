@@ -95,19 +95,22 @@ export const findAddApprovedRequests = async (
 };
 
 // 승인 반려 버튼 기능
-export const update = async ({
-  id,
-  companyId,
-  status,
-  resolverId,
-  resultMessage,
-}: {
-  id: number;
-  companyId: number;
-  status: 'APPROVED' | 'REJECTED';
-  resolverId: string;
-  resultMessage?: string;
-}) => {
+export const update = async (
+  tx: Prisma.TransactionClient,
+  {
+    id,
+    companyId,
+    status,
+    resolverId,
+    resultMessage,
+  }: {
+    id: number;
+    companyId: number;
+    status: 'APPROVED' | 'REJECTED';
+    resolverId: string;
+    resultMessage?: string;
+  }
+) => {
   return await prisma.purchaseRequest.updateMany({
     where: { id, companyId, status: 'PENDING' },
     data: {
