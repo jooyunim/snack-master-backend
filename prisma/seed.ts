@@ -558,11 +558,43 @@ const PRODUCTS = [
   },
 ] as const;
 
-const SEED_PASSWORD = '@a12345';
+const SEED_PASSWORD = 'fs12snack0831!';
 const INITIAL_POINTS = 5000;
 const MONTHLY_BUDGET = 2_000_000;
 const SHIPPING_FEE = 3000;
 const EARN_RATE = 0.01; // 실결제액(포인트 사용분 제외)의 1% 적립
+
+/** Bulk: 한글 이름 유저 + 승인 구매 ~1만 건. Invitation 생성 안 함. */
+const LAST_NAMES = ['김', '이', '박', '최', '정', '강', '조', '윤', '장', '임'];
+const FIRST_NAMES = [
+  '민수',
+  '서연',
+  '지훈',
+  '하은',
+  '도윤',
+  '수아',
+  '예준',
+  '채원',
+  '준서',
+  '지아',
+  '현우',
+  '소율',
+  '우진',
+  '예린',
+  '건우',
+  '다은',
+];
+
+function koreanName(i: number) {
+  const last = LAST_NAMES[i % LAST_NAMES.length];
+  const first =
+    FIRST_NAMES[Math.floor(i / LAST_NAMES.length) % FIRST_NAMES.length];
+  return `${last}${first}`;
+}
+
+const BULK_USER_COUNT = 100;
+const BULK_APPROVED_COUNT = 10_000;
+const BULK_BATCH = 50;
 
 function productSnapshot(productId: number, quantity: number) {
   const p = PRODUCTS.find((pr) => pr.id === productId);
@@ -664,6 +696,8 @@ async function main() {
       });
     })
   );
+
+  const allUsers = [superAdmin, ...admins, ...users];
 
   await prisma.category.createMany({
     data: PARENT_CATEGORIES.map((c) => ({
@@ -962,6 +996,88 @@ async function main() {
     `   PurchaseRequests: ${createdCount} (각 요청별 PurchaseRequestItem 포함)`
   );
 
+  // ===== Bulk (Invitation 테이블에는 데이터 넣지 않음) =====
+  console.log('🌱 Bulk seeding...');
+
+  const bulkUsers: { id: string }[] = [];
+  for (let i = 0; i < BULK_USER_COUNT; i += BULK_BATCH) {
+    const size = Math.min(BULK_BATCH, BULK_USER_COUNT - i);
+    const created = await Promise.all(
+      Array.from({ length: size }, (_, j) => {
+        const idx = i + j;
+        return prisma.user.create({
+          data: {
+            companyId: company.id,
+            email: `bulk.user${idx + 1}@snackmaster.com`,
+            password: passwordHash,
+            name: koreanName(idx),
+            role: Role.USER,
+          },
+          select: { id: true },
+        });
+      })
+    );
+    bulkUsers.push(...created);
+    console.log(
+      `   Bulk users: ${Math.min(i + BULK_BATCH, BULK_USER_COUNT)}/${BULK_USER_COUNT}`
+    );
+  }
+
+  const requesterPool = [...users, ...bulkUsers];
+  const productIds = PRODUCTS.map((p) => p.id);
+
+  for (let i = 0; i < BULK_APPROVED_COUNT; i += BULK_BATCH) {
+    const end = Math.min(i + BULK_BATCH, BULK_APPROVED_COUNT);
+    const jobs = [];
+
+    for (let n = i; n < end; n++) {
+      const requester = requesterPool[n % requesterPool.length];
+      const resolver = admins[n % admins.length];
+      const productId = productIds[n % productIds.length];
+      const quantity = (n % 5) + 1;
+      const snap = productSnapshot(productId, quantity);
+      const totalAmount = snap.price * snap.quantity + SHIPPING_FEE;
+
+      const requestedAt = new Date();
+      requestedAt.setDate(requestedAt.getDate() - (n % 180));
+      const resolvedAt = new Date(requestedAt.getTime() + 2 * 60 * 60 * 1000);
+
+      jobs.push(
+        prisma.purchaseRequest.create({
+          data: {
+            companyId: company.id,
+            requesterId: requester.id,
+            resolverId: resolver.id,
+            status: PurchaseRequestStatus.APPROVED,
+            requestMessage: `대량 시드 요청 #${n + 1}`,
+            resultMessage: '승인되었습니다.',
+            shippingFee: SHIPPING_FEE,
+            pointsUsed: 0,
+            totalAmount,
+            requestedAt,
+            resolvedAt,
+            items: {
+              create: [
+                {
+                  productId: snap.productId,
+                  productName: snap.productName,
+                  price: snap.price,
+                  imageUrl: snap.imageUrl,
+                  quantity: snap.quantity,
+                },
+              ],
+            },
+          },
+        })
+      );
+    }
+
+    await Promise.all(jobs);
+    console.log(`   Bulk approved PRs: ${end}/${BULK_APPROVED_COUNT}`);
+  }
+
+  console.log('✅ Bulk done (Invitation skipped)');
+
   await resetSequences();
 
   console.log('✅ Seed completed');
@@ -969,13 +1085,18 @@ async function main() {
     `   Company: ${company.name} (budget ${MONTHLY_BUDGET.toLocaleString('ko-KR')}원)`
   );
   console.log(
-    `   Users: SUPER_ADMIN 1 / ADMIN 3 / USER 10 (password: ${SEED_PASSWORD})`
+    `   Users: SUPER_ADMIN 1 / ADMIN 3 / USER ${10 + BULK_USER_COUNT} (password: ${SEED_PASSWORD})`
   );
   console.log(
     `   Categories: ${PARENT_CATEGORIES.length} parents + ${SUB_CATEGORIES.length} children`
   );
   console.log(`   Products: ${PRODUCTS.length}`);
-  console.log(`   Points: ${INITIAL_POINTS} each (${users.length} users)`);
+  console.log(
+    `   Points: ${INITIAL_POINTS} each (${allUsers.length} core users; bulk users no initial points)`
+  );
+  console.log(
+    `   Bulk approved PurchaseRequests: ${BULK_APPROVED_COUNT} (+ ${createdCount} scenario seeds)`
+  );
 }
 
 main()
