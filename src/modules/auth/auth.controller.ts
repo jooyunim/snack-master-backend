@@ -5,6 +5,7 @@ import {
   loginUser,
   logoutUser,
   refreshAccessToken,
+  signupAdminUser,
   signupUser,
 } from './auth.service';
 
@@ -15,8 +16,25 @@ export const getEmailName = async (
 ) => {
   try {
     const { token } = req.query;
+
     const emailName = await getEmailNameService(token as string);
     res.status(200).json({ success: true, data: emailName });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const signupAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, name, password, companyName, businessNumber } = req.body;
+
+    await signupAdminUser(email, name, password, companyName, businessNumber);
+
+    res.status(201).json({ success: true, message: '관리자 회원가입 성공' });
   } catch (error) {
     next(error);
   }
@@ -29,8 +47,9 @@ export const signup = async (
 ) => {
   try {
     const { token } = req.query;
-    const { password, passwordConfirm } = req.body;
-    const user = await signupUser(token as string, password, passwordConfirm);
+    const { password } = req.body;
+
+    const user = await signupUser(token as string, password);
 
     res.status(201).json({ success: true, data: user });
   } catch (error) {
@@ -53,6 +72,7 @@ export const login = async (
 ) => {
   try {
     const { email, password } = req.body;
+
     const { refreshToken, ...loginData } = await loginUser(email, password);
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -69,6 +89,7 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
+
     if (refreshToken) {
       await logoutUser(refreshToken);
     }
@@ -102,6 +123,15 @@ export const refresh = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
+
+    if (!refreshToken) {
+      throw new HttpError(
+        401,
+        '리프레시 토큰이 존재하지 않습니다.',
+        'refreshToken'
+      );
+    }
+
     const { refreshToken: newRefreshToken, ...tokenData } =
       await refreshAccessToken(refreshToken);
 

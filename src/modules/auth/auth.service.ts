@@ -29,10 +29,6 @@ const newRefreshToken = async (userId: string) => {
 };
 
 export const getEmailNameService = async (token: string) => {
-  if (!token) {
-    throw new HttpError(400, '유효한 초대 토큰이 존재하지 않습니다.');
-  }
-
   const invitation = await prisma.invitation.findUnique({
     where: { token },
     select: { email: true, name: true, status: true, expiresAt: true },
@@ -53,55 +49,40 @@ export const getEmailNameService = async (token: string) => {
   return { email: invitation.email, name: invitation.name };
 };
 
-export const signupUser = async (
-  token: string,
+export const signupAdminUser = async (
+  email: string,
+  name: string,
   password: string,
-  passwordConfirm: string
+  companyName: string,
+  businessNumber: string
 ) => {
-  if (!token) {
-    throw new HttpError(400, '유효한 초대 토큰이 존재하지 않습니다.');
+  const existingUser = await prisma.user.findUnique({
+    where: { email },
+  });
+  if (existingUser) {
+    throw new HttpError(409, '이미 가입된 이메일입니다.');
   }
 
-  if (!password) {
-    throw new HttpError(400, '비밀번호 값이 필요합니다.', 'password');
-  }
+  const hashedPassword = await bcrypt.hash(password, 10);
 
-  if (!passwordConfirm) {
-    throw new HttpError(
-      400,
-      '비밀번호 확인 값이 필요합니다.',
-      'passwordConfirm'
-    );
-  }
+  await prisma.$transaction(async (tx) => {
+    const newCompany = await tx.company.create({
+      data: { name: companyName, businessNumber, defaultMonthlyBudget: 0 },
+    });
 
-  if (password !== passwordConfirm) {
-    throw new HttpError(
-      400,
-      '비밀번호와 비밀번호 확인 값이 일치하지 않습니다.',
-      'passwordConfirm'
-    );
-  }
+    await tx.user.create({
+      data: {
+        email,
+        name,
+        password: hashedPassword,
+        role: 'ADMIN',
+        companyId: newCompany.id,
+      },
+    });
+  });
+};
 
-  if (password.length < 8 || password.length > 20) {
-    throw new HttpError(
-      400,
-      '비밀번호는 8자 이상 20자 이하여야 합니다.',
-      'password'
-    );
-  }
-
-  if (
-    !/^(?=(?:.*[A-Za-z].*[0-9])|(?=.*[A-Za-z].*[@$!%*?&])|(?=.*[0-9].*[@$!%*?&]))[A-Za-z\d@$!%*?&]{8,}$/.test(
-      password
-    )
-  ) {
-    throw new HttpError(
-      400,
-      '비밀번호는 영문, 숫자, 특수문자 중 두 가지 이상 포함해야 합니다.',
-      'password'
-    );
-  }
-
+export const signupUser = async (token: string, password: string) => {
   const invitation = await prisma.invitation.findUnique({
     where: { token },
     include: { company: true },
@@ -162,10 +143,6 @@ export const signupUser = async (
 };
 
 export const loginUser = async (email: string, password: string) => {
-  if (!email || !password) {
-    throw new HttpError(400, '이메일 또는 비밀번호 값이 존재하지 않습니다.');
-  }
-
   const user = await prisma.user.findFirst({
     where: { email, deletedAt: null },
     select: {
@@ -217,14 +194,6 @@ export const loginUser = async (email: string, password: string) => {
 };
 
 export const logoutUser = async (refreshToken: string) => {
-  if (!refreshToken) {
-    throw new HttpError(
-      401,
-      '리프레시 토큰이 존재하지 않습니다.',
-      'refreshToken'
-    );
-  }
-
   let decoded: string | JwtPayload;
 
   try {
@@ -261,10 +230,6 @@ export const logoutUser = async (refreshToken: string) => {
 };
 
 export const getUserService = async (userId: string) => {
-  if (!userId) {
-    throw new HttpError(401, '인증이 필요합니다.');
-  }
-
   const user = await prisma.user.findFirst({
     where: { id: userId, deletedAt: null },
     select: {
@@ -284,14 +249,6 @@ export const getUserService = async (userId: string) => {
 };
 
 export const refreshAccessToken = async (refreshToken: string) => {
-  if (!refreshToken) {
-    throw new HttpError(
-      401,
-      '리프레시 토큰이 존재하지 않습니다.',
-      'refreshToken'
-    );
-  }
-
   let decoded: string | JwtPayload;
 
   try {
