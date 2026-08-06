@@ -592,6 +592,22 @@ function koreanName(i: number) {
   return `${last}${first}`;
 }
 
+function randomRequestResolvedDates(now = new Date()) {
+  const nowMs = now.getTime();
+  // 1) 승인 시각: 지금보다 과거 (0 ~ 180일 전 사이 랜덤)
+  const resolvedAt = new Date(
+    nowMs - Math.floor(Math.random() * 180 * 24 * 60 * 60 * 1000)
+  );
+  // 2) 요청 시각: 승인보다 이전
+  //    간격 = 최소 1시간 ~ 최대 14일 (랜덤)
+  const minGapMs = 60 * 60 * 1000;
+  const maxGapMs = 14 * 24 * 60 * 60 * 1000;
+  const gapMs =
+    minGapMs + Math.floor(Math.random() * (maxGapMs - minGapMs + 1));
+  const requestedAt = new Date(resolvedAt.getTime() - gapMs);
+  return { requestedAt, resolvedAt };
+}
+
 const BULK_USER_COUNT = 100;
 const BULK_APPROVED_COUNT = 10_000;
 const BULK_BATCH = 50;
@@ -1038,9 +1054,7 @@ async function main() {
       const snap = productSnapshot(productId, quantity);
       const totalAmount = snap.price * snap.quantity + SHIPPING_FEE;
 
-      const requestedAt = new Date();
-      requestedAt.setDate(requestedAt.getDate() - (n % 180));
-      const resolvedAt = new Date(requestedAt.getTime() + 2 * 60 * 60 * 1000);
+      const { requestedAt, resolvedAt } = randomRequestResolvedDates();
 
       jobs.push(
         prisma.purchaseRequest.create({
