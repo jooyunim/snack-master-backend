@@ -975,7 +975,7 @@ async function main() {
     `   Categories: ${PARENT_CATEGORIES.length} parents + ${SUB_CATEGORIES.length} children`
   );
   console.log(`   Products: ${PRODUCTS.length}`);
-  console.log(`   Points: ${INITIAL_POINTS} each (${allUsers.length} users)`);
+  console.log(`   Points: ${INITIAL_POINTS} each (${users.length} users)`);
 }
 
 main()
