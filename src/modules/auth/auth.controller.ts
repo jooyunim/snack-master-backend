@@ -8,6 +8,7 @@ import {
   signupAdminUser,
   signupUser,
 } from './auth.service';
+import { HttpError } from '../../middlewares/HttpError';
 
 export const getEmailName = async (
   req: Request,
