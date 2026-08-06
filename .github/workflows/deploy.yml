@@ -7,20 +7,26 @@ on:
 
 jobs:
   deploy:
+    concurrency:
+      group: production-ec2-deploy
+      cancel-in-progress: false
+
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: 'npm'
+          cache: npm
 
       - name: Install Dependencies
-        run: npm ci
+        run: HUSKY=0 npm ci
 
       - name: Run Tests
         run: npm test --if-present
@@ -35,7 +41,11 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
+          fingerprint: ${{ secrets.EC2_HOST_FINGERPRINT }}
+
           script: |
+            set -e
+
             cd /home/ec2-user/snack-master-backend
 
             git fetch origin
