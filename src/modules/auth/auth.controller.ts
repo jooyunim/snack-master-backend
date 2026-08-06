@@ -10,6 +10,14 @@ import {
 } from './auth.service';
 import { HttpError } from '../../middlewares/HttpError';
 
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+
 export const getEmailName = async (
   req: Request,
   res: Response,
@@ -33,9 +41,19 @@ export const signupAdmin = async (
   try {
     const { email, name, password, companyName, businessNumber } = req.body;
 
-    await signupAdminUser(email, name, password, companyName, businessNumber);
+    const { refreshToken, ...signupData } = await signupAdminUser(
+      email,
+      name,
+      password,
+      companyName,
+      businessNumber
+    );
 
-    res.status(201).json({ success: true, message: '관리자 회원가입 성공' });
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+    res.status(201).json({
+      success: true,
+      ...signupData,
+    });
   } catch (error) {
     next(error);
   }
@@ -56,14 +74,6 @@ export const signup = async (
   } catch (error) {
     next(error);
   }
-};
-
-const REFRESH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/',
 };
 
 export const login = async (

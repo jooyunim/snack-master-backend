@@ -23,7 +23,7 @@ import {
 
 const router = Router();
 
-router.get('/get-email-name', validateQuery(getEmailNameSchema), getEmailName);
+router.get('/email-name', validateQuery(getEmailNameSchema), getEmailName);
 router.post('/signup-admin', validateBody(signupAdminSchema), signupAdmin);
 router.post(
   '/signup',
