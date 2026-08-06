@@ -165,6 +165,7 @@ export const approveRequest = async ({
       status: 'APPROVED',
       pointUsed,
       reward,
+      paidAmount,
     };
   });
   return approved;
