@@ -15,6 +15,7 @@ datasource db {
 model Company {
   id                   Int      @id @default(autoincrement())
   name                 String //기업명 (최고 관리자 프로필에서 수정)
+  businessNumber       String //사업자번호
   defaultMonthlyBudget Int //매달 시작 예산
   createdAt            DateTime @default(now()) @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @db.Timestamptz(6)
