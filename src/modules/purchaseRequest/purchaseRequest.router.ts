@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as purchaseRequestController from './purchaseRequest.controller';
-import { authenticate } from '../../middlewares/auth.middleware';
+import { authenticate, authorize } from '../../middlewares/auth.middleware';
+import { Role } from '@prisma/client';
 
 const router = Router();
 
@@ -21,16 +22,28 @@ router.post(
 );
 
 // 관리자 구매 요청 관리
-router.get('/', authenticate, purchaseRequestController.getRequests);
-router.get('/:id', authenticate, purchaseRequestController.getRequest);
+router.get(
+  '/',
+  authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
+  purchaseRequestController.getRequests
+);
+router.get(
+  '/:id',
+  authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
+  purchaseRequestController.getRequest
+);
 router.patch(
   '/:id/approve',
   authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
   purchaseRequestController.approveRequest
 );
 router.patch(
   '/:id/reject',
   authenticate,
+  authorize(Role.ADMIN, Role.SUPER_ADMIN),
   purchaseRequestController.rejectRequest
 );
 
