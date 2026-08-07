@@ -156,6 +156,7 @@ export const approveRequest = async ({
       status: 'APPROVED',
       resolverId,
       resultMessage,
+      pointsUsed: pointUsed,
     });
     if (result.count === 0) {
       throw new HttpError(404, '요청을 찾을 수 없습니다.');

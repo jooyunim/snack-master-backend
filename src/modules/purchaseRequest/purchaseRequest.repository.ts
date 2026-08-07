@@ -103,12 +103,14 @@ export const update = async (
     status,
     resolverId,
     resultMessage,
+    pointsUsed,
   }: {
     id: number;
     companyId: number;
     status: 'APPROVED' | 'REJECTED';
     resolverId: string;
     resultMessage?: string;
+    pointsUsed?: number;
   }
 ) => {
   return await prisma.purchaseRequest.updateMany({
@@ -118,6 +120,7 @@ export const update = async (
       resolverId,
       resultMessage,
       resolvedAt: new Date(),
+      pointsUsed,
     },
   });
 };
