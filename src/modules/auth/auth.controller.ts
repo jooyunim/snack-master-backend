@@ -5,8 +5,18 @@ import {
   loginUser,
   logoutUser,
   refreshAccessToken,
+  signupAdminUser,
   signupUser,
 } from './auth.service';
+import { HttpError } from '../../middlewares/HttpError';
+
+const REFRESH_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax' as const,
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
 
 export const getEmailName = async (
   req: Request,
@@ -15,8 +25,35 @@ export const getEmailName = async (
 ) => {
   try {
     const { token } = req.query;
+
     const emailName = await getEmailNameService(token as string);
     res.status(200).json({ success: true, data: emailName });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const signupAdmin = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { email, name, password, companyName, businessNumber } = req.body;
+
+    const { refreshToken, ...signupData } = await signupAdminUser(
+      email,
+      name,
+      password,
+      companyName,
+      businessNumber
+    );
+
+    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
+    res.status(201).json({
+      success: true,
+      ...signupData,
+    });
   } catch (error) {
     next(error);
   }
@@ -29,21 +66,14 @@ export const signup = async (
 ) => {
   try {
     const { token } = req.query;
-    const { password, passwordConfirm } = req.body;
-    const user = await signupUser(token as string, password, passwordConfirm);
+    const { password } = req.body;
+
+    const user = await signupUser(token as string, password);
 
     res.status(201).json({ success: true, data: user });
   } catch (error) {
     next(error);
   }
-};
-
-const REFRESH_COOKIE_OPTIONS = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/',
 };
 
 export const login = async (
@@ -53,6 +83,7 @@ export const login = async (
 ) => {
   try {
     const { email, password } = req.body;
+
     const { refreshToken, ...loginData } = await loginUser(email, password);
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
@@ -69,6 +100,7 @@ export const logout = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
+
     if (refreshToken) {
       await logoutUser(refreshToken);
     }
@@ -102,6 +134,15 @@ export const refresh = async (
 ) => {
   try {
     const { refreshToken } = req.cookies;
+
+    if (!refreshToken) {
+      throw new HttpError(
+        401,
+        '리프레시 토큰이 존재하지 않습니다.',
+        'refreshToken'
+      );
+    }
+
     const { refreshToken: newRefreshToken, ...tokenData } =
       await refreshAccessToken(refreshToken);
 
