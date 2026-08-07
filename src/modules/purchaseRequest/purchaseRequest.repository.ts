@@ -90,6 +90,7 @@ export const findAddApprovedRequests = async (
     },
     _sum: {
       totalAmount: true,
+      pointsUsed: true,
     },
   });
 };
@@ -113,7 +114,7 @@ export const update = async (
     pointsUsed?: number;
   }
 ) => {
-  return await prisma.purchaseRequest.updateMany({
+  return await tx.purchaseRequest.updateMany({
     where: { id, companyId, status: 'PENDING' },
     data: {
       status,

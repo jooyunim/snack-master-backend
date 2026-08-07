@@ -92,8 +92,10 @@ export const approveRequest = async ({
     const paidAmount = request.totalAmount - pointUsed;
 
     //배송비 뺀 실제 결제액
-    const paidAmountWithoutShippingFee =
-      request.totalAmount - request.shippingFee - pointUsed;
+    const paidAmountWithoutShippingFee = Math.max(
+      0,
+      request.totalAmount - request.shippingFee - pointUsed
+    );
 
     //당월 예산 조회 => 부족하면 에러, 실 결제액만큼 예산 차감
     const now = new Date();
@@ -227,7 +229,9 @@ export const getDetail = async (id: number, companyId: number) => {
     start,
     end
   );
-  const thisMonthSpent = addApproved._sum.totalAmount ?? 0;
+  const thisMonthapproved = addApproved._sum.totalAmount ?? 0;
+  const thisMonthPoints = addApproved._sum.pointsUsed ?? 0;
+  const thisMonthSpent = thisMonthapproved - thisMonthPoints;
 
   const remained = budget.amount;
   const afterBudget = remained - request.totalAmount;

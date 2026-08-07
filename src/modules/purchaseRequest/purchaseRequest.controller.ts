@@ -14,7 +14,7 @@ export const getRequests = async (
       companyId,
       sortBy
     );
-    return res.status(200).json({ data: requests });
+    return res.status(200).json({ success: true, data: requests });
   } catch (err) {
     next(err);
   }
@@ -27,13 +27,13 @@ export const getRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id < 1) {
       throw new HttpError(400, '올바르지 않은 구매 요청 ID입니다.');
     }
 
     const companyId = req.user!.companyId;
     const request = await purchaseRequestService.getDetail(id, companyId);
-    return res.status(200).json({ data: request });
+    return res.status(200).json({ success: true, data: request });
   } catch (err) {
     next(err);
   }
@@ -46,15 +46,13 @@ export const approveRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id < 1) {
       throw new HttpError(400, '올바르지 않은 구매 요청 ID입니다.');
     }
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
     const { resultMessage, requestPointAmount } = req.body;
-    console.log('6', requestPointAmount);
     const parsedPointAmount = Number(requestPointAmount ?? 0);
-    console.log('7', parsedPointAmount);
     if (isNaN(parsedPointAmount) || parsedPointAmount < 0) {
       throw new HttpError(400, '올바른 포인트 금액을 입력해 주세요.');
     }
@@ -66,7 +64,7 @@ export const approveRequest = async (
       requestPointAmount: parsedPointAmount,
     });
 
-    return res.status(200).json({ data: result });
+    return res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -79,7 +77,7 @@ export const rejectRequest = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id < 1) {
       throw new HttpError(400, '올바르지 않은 구매 요청 ID입니다.');
     }
     const companyId = req.user!.companyId;
@@ -91,7 +89,7 @@ export const rejectRequest = async (
       resolverId,
       resultMessage,
     });
-    return res.status(200).json({ message: '반려되었습니다.' });
+    return res.status(200).json({ success: true, message: '반려되었습니다.' });
   } catch (err) {
     next(err);
   }
