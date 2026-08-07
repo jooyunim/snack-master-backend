@@ -558,26 +558,142 @@ const PRODUCTS = [
   },
 ] as const;
 
-const SEED_PASSWORD = '@a12345';
-const INITIAL_POINTS = 5000;
+const SEED_PASSWORD = 'fs12snack0831!';
+const INITIAL_POINTS = 10_000;
 const MONTHLY_BUDGET = 2_000_000;
 const SHIPPING_FEE = 3000;
-const EARN_RATE = 0.01; // 실결제액(포인트 사용분 제외)의 1% 적립
+const BUDGET_MONTHS = 6;
+/** 배송비 제외 실결제액(상품합계 - 포인트사용)의 1% 적립 (내림) */
+const EARN_RATE = 0.01;
 
-function productSnapshot(productId: number, quantity: number) {
-  const p = PRODUCTS.find((pr) => pr.id === productId);
-  if (!p) throw new Error(`Unknown seed productId: ${productId}`);
+/** 회사당 멤버 구성 (합 80) */
+const SUPER_ADMINS_PER_COMPANY = 2;
+const ADMINS_PER_COMPANY = 4;
+const USERS_PER_COMPANY = 74;
+
+/** 회사당 PurchaseRequest 1000건 기준 상태 비율 */
+const PR_PER_COMPANY = 1000;
+const PR_STATUS_COUNTS = {
+  APPROVED: 500, // 50%
+  PENDING: 300, // 30%
+  REJECTED: 150, // 15%
+  CANCELED: 50, // 5%
+} as const;
+
+const COMPANIES = [
+  {
+    name: '스낵마스터',
+    businessNumber: '12-34567-89',
+    defaultMonthlyBudget: MONTHLY_BUDGET,
+  },
+  {
+    name: '오피스굿즈',
+    businessNumber: '23-45678-90',
+    defaultMonthlyBudget: MONTHLY_BUDGET,
+  },
+  {
+    name: '피플스낵',
+    businessNumber: '34-56789-01',
+    defaultMonthlyBudget: 1_800_000,
+  },
+  {
+    name: '워크스낵',
+    businessNumber: '45-67890-12',
+    defaultMonthlyBudget: MONTHLY_BUDGET,
+  },
+  {
+    name: '베네핏푸드',
+    businessNumber: '56-78901-23',
+    defaultMonthlyBudget: 1_900_000,
+  },
+] as const;
+
+/** 3글자 한국 이름 풀 */
+const KOREAN_NAMES = [
+  '김민수',
+  '이서연',
+  '박지훈',
+  '최유나',
+  '정하늘',
+  '강예준',
+  '윤서아',
+  '임도윤',
+  '한지우',
+  '오채원',
+  '서준호',
+  '배수지',
+  '문재현',
+  '신예린',
+  '조현우',
+  '홍다은',
+  '유성민',
+  '남지우',
+  '송하린',
+  '권태영',
+  '황민재',
+  '안소희',
+  '백진우',
+  '노하은',
+  '구민호',
+  '표서윤',
+  '배수아',
+  '전우진',
+  '양지안',
+  '고은서',
+  '차현석',
+  '라예나',
+  '도경수',
+  '마린아',
+  '석지훈',
+  '여민서',
+] as const;
+
+type DbUser = { id: string; companyId: number; role: Role; name: string };
+type DbProduct = {
+  id: number;
+  name: string;
+  price: number;
+  s3Key: string;
+  companyId: number;
+};
+
+function itemsTotal(items: { price: number; quantity: number }[]) {
+  return items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+}
+
+function productSnapshot(
+  product: DbProduct,
+  quantity: number
+): {
+  productId: number;
+  productName: string;
+  price: number;
+  imageUrl: string;
+  quantity: number;
+} {
   return {
-    productId: p.id,
-    productName: p.name,
-    price: p.price,
-    imageUrl: `https://picsum.photos/seed/snack-${p.id}/400/400`,
+    productId: product.id,
+    productName: product.name,
+    price: product.price,
+    imageUrl: product.s3Key,
     quantity,
   };
 }
 
-function itemsTotal(items: { price: number; quantity: number }[]) {
-  return items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+function monthDate(now: Date, monthsAgo: number, day = 10): Date {
+  return new Date(now.getFullYear(), now.getMonth() - monthsAgo, day, 12, 0, 0);
+}
+
+function pickProducts(
+  products: DbProduct[],
+  seed: number,
+  count: number
+): DbProduct[] {
+  const result: DbProduct[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(products[(seed + i * 7) % products.length]!);
+  }
+  return result;
 }
 
 async function clearDatabase() {
@@ -602,6 +718,7 @@ async function resetSequences() {
     'Budget',
     'PointTransaction',
     'CartItem',
+    'WishList',
     'PurchaseRequest',
     'PurchaseRequestItem',
   ];
@@ -617,54 +734,10 @@ async function main() {
 
   await clearDatabase();
 
-  const company = await prisma.company.create({
-    data: {
-      name: '스낵마스터',
-      defaultMonthlyBudget: MONTHLY_BUDGET,
-    },
-  });
-
   const passwordHash = await bcrypt.hash(SEED_PASSWORD, 10);
+  const now = new Date();
 
-  const superAdmin = await prisma.user.create({
-    data: {
-      companyId: company.id,
-      email: 'super@snackmaster.com',
-      password: passwordHash,
-      name: '최고관리자',
-      role: Role.SUPER_ADMIN,
-    },
-  });
-
-  const admins = await Promise.all(
-    [1, 2, 3].map((n) =>
-      prisma.user.create({
-        data: {
-          companyId: company.id,
-          email: `admin${n}@snackmaster.com`,
-          password: passwordHash,
-          name: `관리자${n}`,
-          role: Role.ADMIN,
-        },
-      })
-    )
-  );
-
-  const users = await Promise.all(
-    Array.from({ length: 10 }, (_, i) => {
-      const n = i + 1;
-      return prisma.user.create({
-        data: {
-          companyId: company.id,
-          email: `user${n}@snackmaster.com`,
-          password: passwordHash,
-          name: `사용자${n}`,
-          role: Role.USER,
-        },
-      });
-    })
-  );
-
+  // ===== Category (공용, 회사 공통) =====
   await prisma.category.createMany({
     data: PARENT_CATEGORIES.map((c) => ({
       id: c.id,
@@ -683,299 +756,389 @@ async function main() {
     })),
   });
 
-  await prisma.product.createMany({
-    data: PRODUCTS.map((p) => ({
-      id: p.id,
-      name: p.name,
-      price: p.price,
-      linkUrl: p.url,
-      filename: p.photo,
-      s3Key: `https://picsum.photos/seed/snack-${p.id}/400/400`,
-      categoryId: p.subCategoryId + SUB_CATEGORY_OFFSET,
-      companyId: company.id,
-      creatorId: superAdmin.id,
-      totalSold: 0,
-    })),
-  });
+  let nameIdx = 0;
+  let userEmailIdx = 1;
+  let adminEmailIdx = 1;
+  let superEmailIdx = 1;
 
-  // ===== 예산 (Budget) =====
-  // 이번 달 기준 과거 5개월 + 이번 달, 총 6개월치 예산 생성
-  const now = new Date();
-  const BUDGET_MONTHS = 6;
-  // 기본 예산 대비 월별 배수(과거 → 현재). 매달 동일 금액이 아니라
-  // 실제로 있을 법한 증액/감액 이력을 표현하기 위함.
-  const BUDGET_MULTIPLIERS = [0.8, 0.8, 1, 1, 1.1, 1] as const;
+  let totalCartItems = 0;
+  let totalWishLists = 0;
+  let totalPurchaseRequests = 0;
+  let totalPointTx = 0;
 
-  const budgetsData = Array.from({ length: BUDGET_MONTHS }, (_, i) => {
-    const offset = BUDGET_MONTHS - 1 - i; // 오래된 달부터 순서대로
-    const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-    const multiplier = BUDGET_MULTIPLIERS[i] ?? 1;
-    return {
-      year: d.getFullYear(),
-      month: d.getMonth() + 1,
-      amount: Math.round((MONTHLY_BUDGET * multiplier) / 10000) * 10000,
-    };
-  });
+  for (let companyIndex = 0; companyIndex < COMPANIES.length; companyIndex++) {
+    const companySeed = COMPANIES[companyIndex]!;
 
-  await prisma.budget.createMany({
-    data: budgetsData.map((b) => ({
-      companyId: company.id,
-      year: b.year,
-      month: b.month,
-      amount: b.amount,
-    })),
-  });
-  console.log(`   Budgets: ${budgetsData.length}개월치 생성`);
-
-  const pointRecipients = [superAdmin, ...admins];
-  await prisma.pointTransaction.createMany({
-    data: pointRecipients.map((u) => ({
-      userId: u.id,
-      companyId: company.id,
-      type: PointType.ADMIN_CREDIT,
-      amount: INITIAL_POINTS,
-      purchaseRequestId: null,
-      description: '시드 초기 포인트',
-    })),
-  });
-
-  // ===== 장바구니 (CartItem) =====
-  const cartItemsData = [
-    { user: users[0], productId: 1, quantity: 2 },
-    { user: users[0], productId: 3, quantity: 1 },
-    { user: users[0], productId: 5, quantity: 3 },
-    { user: users[1], productId: 16, quantity: 1 },
-    { user: users[1], productId: 32, quantity: 4 },
-    { user: users[2], productId: 39, quantity: 2 },
-    { user: users[2], productId: 50, quantity: 1 },
-    { user: users[3], productId: 56, quantity: 1 },
-  ];
-
-  await prisma.cartItem.createMany({
-    data: cartItemsData.map((c) => ({
-      userId: c.user.id,
-      productId: c.productId,
-      quantity: c.quantity,
-    })),
-  });
-  console.log(`   CartItems: ${cartItemsData.length}`);
-
-  // ===== 구매 요청 (PurchaseRequest / PurchaseRequestItem) =====
-  type PRSeed = {
-    requester: (typeof allUsers)[number];
-    resolver?: (typeof allUsers)[number];
-    status: PurchaseRequestStatus;
-    requestMessage?: string;
-    resultMessage?: string;
-    pointsUsed?: number;
-    items: { productId: number; quantity: number }[];
-    refund?: {
-      refundedBy: (typeof allUsers)[number];
-      refundReason: string;
-    };
-  };
-
-  const purchaseRequestSeeds: PRSeed[] = [
-    {
-      // PENDING: 아직 관리자 처리 전
-      requester: users[0],
-      status: PurchaseRequestStatus.PENDING,
-      requestMessage: '주간 간식 보충 요청입니다.',
-      items: [
-        { productId: 1, quantity: 2 },
-        { productId: 3, quantity: 1 },
-      ],
-    },
-    {
-      // APPROVED: 포인트 일부 사용 + 적립 발생
-      requester: users[1],
-      resolver: admins[0],
-      status: PurchaseRequestStatus.APPROVED,
-      requestMessage: '탕비실용 음료 구매 요청드립니다.',
-      resultMessage: '승인되었습니다.',
-      pointsUsed: 2000,
-      items: [
-        { productId: 16, quantity: 3 },
-        { productId: 32, quantity: 2 },
-      ],
-    },
-    {
-      // REJECTED: 예산 초과로 반려
-      requester: users[2],
-      resolver: admins[1],
-      status: PurchaseRequestStatus.REJECTED,
-      requestMessage: '라면 대량 구매 요청입니다.',
-      resultMessage: '이번 달 예산 초과로 반려합니다.',
-      items: [{ productId: 39, quantity: 5 }],
-    },
-    {
-      // CANCELED: 관리자 처리 전 요청자 본인이 철회
-      requester: users[3],
-      status: PurchaseRequestStatus.CANCELED,
-      requestMessage: '빵 구매 요청드립니다.',
-      items: [{ productId: 50, quantity: 2 }],
-    },
-    {
-      // APPROVED 후 REFUNDED: 승인 시 포인트 사용/적립 발생, 이후 환불 시 반대로 정정
-      requester: users[4],
-      resolver: admins[2],
-      status: PurchaseRequestStatus.REFUNDED,
-      requestMessage: '커피믹스 구매 요청드립니다.',
-      resultMessage: '승인되었습니다.',
-      pointsUsed: 1000,
-      items: [{ productId: 56, quantity: 1 }],
-      refund: {
-        refundedBy: admins[0],
-        refundReason: '제품 불량으로 환불 처리합니다.',
-      },
-    },
-    {
-      // PENDING
-      requester: users[5],
-      status: PurchaseRequestStatus.PENDING,
-      requestMessage: '과일 및 컵밥 구매 요청드립니다.',
-      items: [
-        { productId: 24, quantity: 3 },
-        { productId: 44, quantity: 1 },
-      ],
-    },
-    {
-      // APPROVED
-      requester: users[6],
-      resolver: admins[0],
-      status: PurchaseRequestStatus.APPROVED,
-      requestMessage: '생수 및 초코파이 구매 요청드립니다.',
-      resultMessage: '승인되었습니다.',
-      pointsUsed: 3000,
-      items: [
-        { productId: 32, quantity: 5 },
-        { productId: 1, quantity: 1 },
-      ],
-    },
-    {
-      // REJECTED
-      requester: users[7],
-      resolver: admins[1],
-      status: PurchaseRequestStatus.REJECTED,
-      requestMessage: '새우깡 대량 구매 요청입니다.',
-      resultMessage: '재고 부족으로 반려합니다.',
-      items: [{ productId: 3, quantity: 10 }],
-    },
-  ];
-
-  let createdCount = 0;
-  for (const seed of purchaseRequestSeeds) {
-    const itemSnapshots = seed.items.map((i) =>
-      productSnapshot(i.productId, i.quantity)
-    );
-    const totalAmount = itemsTotal(itemSnapshots) + SHIPPING_FEE;
-    const pointsUsed = seed.pointsUsed ?? 0;
-    const isResolved =
-      seed.status !== PurchaseRequestStatus.PENDING &&
-      seed.status !== PurchaseRequestStatus.CANCELED;
-    const isPaid =
-      seed.status === PurchaseRequestStatus.APPROVED ||
-      seed.status === PurchaseRequestStatus.REFUNDED;
-
-    const purchaseRequest = await prisma.purchaseRequest.create({
+    const company = await prisma.company.create({
       data: {
-        companyId: company.id,
-        requesterId: seed.requester.id,
-        resolverId: seed.resolver?.id ?? null,
-        status: seed.status,
-        requestMessage: seed.requestMessage,
-        resultMessage: seed.resultMessage,
-        shippingFee: SHIPPING_FEE,
-        pointsUsed: isPaid ? pointsUsed : 0,
-        totalAmount,
-        refundedAt: seed.refund ? new Date() : null,
-        refundedById: seed.refund?.refundedBy.id ?? null,
-        refundReason: seed.refund?.refundReason ?? null,
-        resolvedAt: isResolved ? new Date() : null,
-        items: {
-          create: itemSnapshots,
-        },
+        name: companySeed.name,
+        businessNumber: companySeed.businessNumber,
+        defaultMonthlyBudget: companySeed.defaultMonthlyBudget,
       },
     });
-    createdCount += 1;
 
-    if (isPaid) {
-      const paidAmount = totalAmount - pointsUsed;
-      const earnAmount = Math.round(paidAmount * EARN_RATE);
+    const nextName = () => {
+      const name = KOREAN_NAMES[nameIdx % KOREAN_NAMES.length]!;
+      nameIdx += 1;
+      return name;
+    };
 
-      if (pointsUsed > 0) {
-        await prisma.pointTransaction.create({
-          data: {
-            userId: seed.requester.id,
-            companyId: company.id,
-            type: PointType.USE,
-            amount: pointsUsed,
-            purchaseRequestId: purchaseRequest.id,
-            description: '구매 승인 시 포인트 사용',
-          },
+    const superAdmins: DbUser[] = [];
+    for (let i = 0; i < SUPER_ADMINS_PER_COMPANY; i++) {
+      const superAdmin = await prisma.user.create({
+        data: {
+          companyId: company.id,
+          email: `super${superEmailIdx++}@snackmaster.com`,
+          password: passwordHash,
+          name: nextName(),
+          role: Role.SUPER_ADMIN,
+        },
+      });
+      superAdmins.push(superAdmin);
+    }
+    const primarySuperAdmin = superAdmins[0]!;
+
+    const admins: DbUser[] = [];
+    for (let i = 0; i < ADMINS_PER_COMPANY; i++) {
+      const admin = await prisma.user.create({
+        data: {
+          companyId: company.id,
+          email: `admin${adminEmailIdx++}@snackmaster.com`,
+          password: passwordHash,
+          name: nextName(),
+          role: Role.ADMIN,
+        },
+      });
+      admins.push(admin);
+    }
+
+    const users: DbUser[] = [];
+    for (let i = 0; i < USERS_PER_COMPANY; i++) {
+      const user = await prisma.user.create({
+        data: {
+          companyId: company.id,
+          email: `user${userEmailIdx++}@snackmaster.com`,
+          password: passwordHash,
+          name: nextName(),
+          role: Role.USER,
+        },
+      });
+      users.push(user);
+    }
+
+    const allMembers: DbUser[] = [...superAdmins, ...admins, ...users];
+    const resolvers = [...superAdmins, ...admins];
+
+    // ===== Product: 61개 × 회사 =====
+    await prisma.product.createMany({
+      data: PRODUCTS.map((p) => ({
+        name: p.name,
+        price: p.price,
+        linkUrl: p.url,
+        filename: p.photo,
+        s3Key: `https://picsum.photos/seed/snack-${company.id}-${p.id}/400/400`,
+        categoryId: p.subCategoryId + SUB_CATEGORY_OFFSET,
+        companyId: company.id,
+        creatorId: primarySuperAdmin.id,
+        totalSold: 0,
+      })),
+    });
+
+    const products = (await prisma.product.findMany({
+      where: { companyId: company.id },
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        s3Key: true,
+        companyId: true,
+      },
+    })) as DbProduct[];
+
+    // ===== Budget 6개월 (초기 편성액) =====
+    const BUDGET_MULTIPLIERS = [0.8, 0.85, 1, 1, 1.1, 1] as const;
+    const budgetInitial = new Map<string, number>();
+
+    const budgetsData = Array.from({ length: BUDGET_MONTHS }, (_, i) => {
+      const offset = BUDGET_MONTHS - 1 - i;
+      const d = new Date(now.getFullYear(), now.getMonth() - offset, 1);
+      const multiplier = BUDGET_MULTIPLIERS[i] ?? 1;
+      const amount =
+        Math.round((companySeed.defaultMonthlyBudget * multiplier) / 10000) *
+        10000;
+      const key = `${d.getFullYear()}-${d.getMonth() + 1}`;
+      budgetInitial.set(key, amount);
+      return {
+        companyId: company.id,
+        year: d.getFullYear(),
+        month: d.getMonth() + 1,
+        amount,
+      };
+    });
+
+    await prisma.budget.createMany({ data: budgetsData });
+
+    // ===== 초기 포인트 (전 멤버) — USE 가능하도록 =====
+    await prisma.pointTransaction.createMany({
+      data: allMembers.map((u) => ({
+        userId: u.id,
+        companyId: company.id,
+        type: PointType.ADMIN_CREDIT,
+        amount: INITIAL_POINTS,
+        purchaseRequestId: null,
+        description: '시드 초기 포인트',
+      })),
+    });
+    totalPointTx += allMembers.length;
+
+    const pointBalance = new Map<string, number>(
+      allMembers.map((u) => [u.id, INITIAL_POINTS])
+    );
+    /** 월별 승인 실결제액 합 (예산 차감용) */
+    const monthPaid = new Map<string, number>();
+
+    // ===== CartItem / WishList =====
+    const cartRows: { userId: string; productId: number; quantity: number }[] =
+      [];
+    const wishRows: { userId: string; productId: number }[] = [];
+
+    for (let ui = 0; ui < users.length; ui++) {
+      const user = users[ui]!;
+      const cartCount = 2 + (ui % 3);
+      const picked = pickProducts(products, ui * 3 + companyIndex, cartCount);
+      for (let ci = 0; ci < picked.length; ci++) {
+        cartRows.push({
+          userId: user.id,
+          productId: picked[ci]!.id,
+          quantity: 1 + ((ui + ci) % 3),
         });
       }
 
-      if (earnAmount > 0) {
-        await prisma.pointTransaction.create({
-          data: {
-            userId: seed.requester.id,
-            companyId: company.id,
-            type: PointType.EARN,
-            amount: earnAmount,
-            purchaseRequestId: purchaseRequest.id,
-            description: '구매 승인 시 실결제액 기준 적립',
-          },
-        });
-      }
-
-      if (seed.refund) {
-        // 환불 시 기존 적립/사용 포인트를 반대로 정정
-        if (earnAmount > 0) {
-          await prisma.pointTransaction.create({
-            data: {
-              userId: seed.requester.id,
-              companyId: company.id,
-              type: PointType.USE,
-              amount: earnAmount,
-              purchaseRequestId: purchaseRequest.id,
-              description: '환불로 인한 적립 포인트 회수',
-            },
-          });
-        }
-        if (pointsUsed > 0) {
-          await prisma.pointTransaction.create({
-            data: {
-              userId: seed.requester.id,
-              companyId: company.id,
-              type: PointType.EARN,
-              amount: pointsUsed,
-              purchaseRequestId: purchaseRequest.id,
-              description: '환불로 인한 사용 포인트 반환',
-            },
-          });
-        }
+      const wishCount = 1 + (ui % 4);
+      const wished = pickProducts(products, ui * 5 + 11, wishCount);
+      for (const p of wished) {
+        wishRows.push({ userId: user.id, productId: p.id });
       }
     }
+
+    // unique (userId, productId)
+    const cartUnique = [
+      ...new Map(
+        cartRows.map((r) => [`${r.userId}:${r.productId}`, r] as const)
+      ).values(),
+    ];
+    const wishUnique = [
+      ...new Map(
+        wishRows.map((r) => [`${r.userId}:${r.productId}`, r] as const)
+      ).values(),
+    ];
+
+    await prisma.cartItem.createMany({ data: cartUnique });
+    await prisma.wishList.createMany({ data: wishUnique });
+    totalCartItems += cartUnique.length;
+    totalWishLists += wishUnique.length;
+
+    // ===== PurchaseRequest 자동 생성 (상태 비율, REFUNDED 없음) =====
+    type StatusPlan = {
+      status: PurchaseRequestStatus;
+      count: number;
+    };
+    const statusPlan: StatusPlan[] = [
+      {
+        status: PurchaseRequestStatus.APPROVED,
+        count: PR_STATUS_COUNTS.APPROVED,
+      },
+      {
+        status: PurchaseRequestStatus.PENDING,
+        count: PR_STATUS_COUNTS.PENDING,
+      },
+      {
+        status: PurchaseRequestStatus.REJECTED,
+        count: PR_STATUS_COUNTS.REJECTED,
+      },
+      {
+        status: PurchaseRequestStatus.CANCELED,
+        count: PR_STATUS_COUNTS.CANCELED,
+      },
+    ];
+
+    let prSeq = 0;
+    for (const plan of statusPlan) {
+      for (let n = 0; n < plan.count; n++) {
+        const requester = users[prSeq % users.length]!;
+        const itemCount = 1 + (prSeq % 3);
+        const itemProducts = pickProducts(
+          products,
+          prSeq * 4 + companyIndex * 13,
+          itemCount
+        );
+        const itemSnapshots = itemProducts.map((p, idx) =>
+          productSnapshot(p, 1 + ((prSeq + idx) % 3))
+        );
+        const goodsTotal = itemsTotal(itemSnapshots);
+        const totalAmount = goodsTotal + SHIPPING_FEE;
+
+        // APPROVED를 6개월에 고르게 분산
+        const monthsAgo =
+          plan.status === PurchaseRequestStatus.APPROVED
+            ? prSeq % BUDGET_MONTHS
+            : 0;
+        const requestedAt = monthDate(now, monthsAgo, 5 + (prSeq % 20));
+        const resolvedAt = monthDate(now, monthsAgo, 8 + (prSeq % 18));
+
+        const isResolved =
+          plan.status === PurchaseRequestStatus.APPROVED ||
+          plan.status === PurchaseRequestStatus.REJECTED;
+
+        let pointsUsed = 0;
+        if (plan.status === PurchaseRequestStatus.APPROVED) {
+          const balance = pointBalance.get(requester.id) ?? 0;
+          // 일부 승인 건만 포인트 사용 (잔액·총액 내로)
+          if (prSeq % 2 === 0 && balance > 0) {
+            const maxUse = Math.min(balance, totalAmount, 3000);
+            pointsUsed = Math.floor(maxUse / 100) * 100;
+          }
+        }
+
+        const paidAmount = totalAmount - pointsUsed;
+        const resolver =
+          isResolved || plan.status === PurchaseRequestStatus.APPROVED
+            ? resolvers[prSeq % resolvers.length]
+            : undefined;
+
+        let resultMessage: string | null = null;
+        if (plan.status === PurchaseRequestStatus.APPROVED) {
+          resultMessage = '승인되었습니다.';
+        } else if (plan.status === PurchaseRequestStatus.REJECTED) {
+          resultMessage = '예산 또는 정책상 반려합니다.';
+        }
+
+        const purchaseRequest = await prisma.purchaseRequest.create({
+          data: {
+            companyId: company.id,
+            requesterId: requester.id,
+            resolverId: resolver?.id ?? null,
+            status: plan.status,
+            requestMessage: `${company.name} 구매 요청 #${prSeq + 1}`,
+            resultMessage,
+            shippingFee: SHIPPING_FEE,
+            pointsUsed:
+              plan.status === PurchaseRequestStatus.APPROVED ? pointsUsed : 0,
+            totalAmount,
+            requestedAt,
+            resolvedAt: isResolved ? resolvedAt : null,
+            items: { create: itemSnapshots },
+          },
+        });
+        totalPurchaseRequests += 1;
+
+        // APPROVED만 PointTransaction + Budget 차감 + totalSold
+        if (plan.status === PurchaseRequestStatus.APPROVED) {
+          const year = resolvedAt.getFullYear();
+          const month = resolvedAt.getMonth() + 1;
+          const monthKey = `${year}-${month}`;
+          monthPaid.set(monthKey, (monthPaid.get(monthKey) ?? 0) + paidAmount);
+
+          if (pointsUsed > 0) {
+            await prisma.pointTransaction.create({
+              data: {
+                userId: requester.id,
+                companyId: company.id,
+                type: PointType.USE,
+                amount: pointsUsed,
+                purchaseRequestId: purchaseRequest.id,
+                description: '구매 승인 시 포인트 사용',
+                createdAt: resolvedAt,
+              },
+            });
+            pointBalance.set(
+              requester.id,
+              (pointBalance.get(requester.id) ?? 0) - pointsUsed
+            );
+            totalPointTx += 1;
+          }
+
+          // cart.service와 동일: (상품합계 - 포인트사용) * 1% 내림
+          const earnAmount = Math.floor(
+            Math.max(0, goodsTotal - pointsUsed) * EARN_RATE
+          );
+          if (earnAmount > 0) {
+            await prisma.pointTransaction.create({
+              data: {
+                userId: requester.id,
+                companyId: company.id,
+                type: PointType.EARN,
+                amount: earnAmount,
+                purchaseRequestId: purchaseRequest.id,
+                description: '구매 승인 시 실결제액 기준 적립',
+                createdAt: resolvedAt,
+              },
+            });
+            pointBalance.set(
+              requester.id,
+              (pointBalance.get(requester.id) ?? 0) + earnAmount
+            );
+            totalPointTx += 1;
+          }
+
+          await Promise.all(
+            itemSnapshots.map((item) =>
+              prisma.product.update({
+                where: { id: item.productId },
+                data: { totalSold: { increment: item.quantity } },
+              })
+            )
+          );
+        }
+
+        prSeq += 1;
+      }
+    }
+
+    // Budget.amount = 초기 편성액 - 해당 월 APPROVED 실결제액 (cart.service decrement와 동일)
+    for (const b of budgetsData) {
+      const key = `${b.year}-${b.month}`;
+      const initial = budgetInitial.get(key) ?? b.amount;
+      const paid = monthPaid.get(key) ?? 0;
+      const remaining = Math.max(0, initial - paid);
+      await prisma.budget.update({
+        where: {
+          companyId_year_month: {
+            companyId: company.id,
+            year: b.year,
+            month: b.month,
+          },
+        },
+        data: { amount: remaining },
+      });
+    }
+
+    console.log(
+      `   Company "${company.name}" (${company.businessNumber}): products ${products.length}, PR ${PR_PER_COMPANY}`
+    );
   }
-  console.log(
-    `   PurchaseRequests: ${createdCount} (각 요청별 PurchaseRequestItem 포함)`
-  );
 
   await resetSequences();
 
   console.log('✅ Seed completed');
+  console.log(`   Companies: ${COMPANIES.length}`);
   console.log(
-    `   Company: ${company.name} (budget ${MONTHLY_BUDGET.toLocaleString('ko-KR')}원)`
+    `   Categories: ${PARENT_CATEGORIES.length} parents + ${SUB_CATEGORIES.length} children (공용)`
   );
   console.log(
-    `   Users: SUPER_ADMIN 1 / ADMIN 3 / USER 10 (password: ${SEED_PASSWORD})`
+    `   Products: ${PRODUCTS.length} × ${COMPANIES.length} companies`
   );
   console.log(
-    `   Categories: ${PARENT_CATEGORIES.length} parents + ${SUB_CATEGORIES.length} children`
+    `   Users: company당 SUPER_ADMIN ${SUPER_ADMINS_PER_COMPANY} / ADMIN ${ADMINS_PER_COMPANY} / USER ${USERS_PER_COMPANY} (email: user{n}@snackmaster.com)`
   );
-  console.log(`   Products: ${PRODUCTS.length}`);
-  console.log(`   Points: ${INITIAL_POINTS} each (${users.length} users)`);
+  console.log(`   Password: ${SEED_PASSWORD}`);
+  console.log(`   Budgets: ${BUDGET_MONTHS}개월 × ${COMPANIES.length}회사`);
+  console.log(`   CartItems: ${totalCartItems} / WishLists: ${totalWishLists}`);
+  console.log(
+    `   PurchaseRequests: ${totalPurchaseRequests} (APPROVED 50% / PENDING 30% / REJECTED 15% / CANCELED 5%, REFUNDED 없음)`
+  );
+  console.log(`   PointTransactions: ${totalPointTx} (APPROVED만 USE/EARN)`);
 }
 
 main()
