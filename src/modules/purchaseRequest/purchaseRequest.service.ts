@@ -1,4 +1,4 @@
-import { PurchaseRequestStatus } from '@prisma/client';
+import { Prisma, PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import * as purchaseRequestRepository from './purchaseRequest.repository';
@@ -135,12 +135,12 @@ export const getMyPurchaseRequests = async (
     requesterId: userId,
   };
 
-  const orderBy =
+  const orderBy: Prisma.PurchaseRequestOrderByWithRelationInput[] =
     sortBy === 'price_asc'
-      ? { totalAmount: 'asc' as const }
+      ? [{ totalAmount: 'asc' }, { id: 'asc' }]
       : sortBy === 'price_desc'
-        ? { totalAmount: 'desc' as const }
-        : { requestedAt: 'desc' as const };
+        ? [{ totalAmount: 'desc' }, { id: 'asc' }]
+        : [{ requestedAt: 'desc' }, { id: 'asc' }];
 
   const [purchaseRequests, total] = await prisma.$transaction([
     prisma.purchaseRequest.findMany({
