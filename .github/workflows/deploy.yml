@@ -30,6 +30,9 @@ jobs:
 
       - name: Run Tests
         run: npm test --if-present
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
 
       - name: Build Project
         run: npm run build --if-present
