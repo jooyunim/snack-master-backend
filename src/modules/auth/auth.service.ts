@@ -60,17 +60,17 @@ export const signupAdminUser = async (
     where: { email },
   });
   if (existingUser) {
-    throw new HttpError(409, '이미 가입된 이메일입니다.');
+    throw new HttpError(400, '이미 가입된 이메일입니다.');
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const newUser = await prisma.$transaction(async (tx) => {
+  const { newUser, refreshToken } = await prisma.$transaction(async (tx) => {
     const newCompany = await tx.company.create({
       data: { name: companyName, businessNumber, defaultMonthlyBudget: 0 },
     });
 
-    return tx.user.create({
+    const newUser = await tx.user.create({
       data: {
         email,
         name,
@@ -86,6 +86,19 @@ export const signupAdminUser = async (
         companyId: true,
       },
     });
+
+    const { refreshToken, refreshTokenHash } = await newRefreshToken(
+      newUser.id
+    );
+
+    await tx.user.update({
+      where: { id: newUser.id },
+      data: {
+        refreshTokenHash,
+        refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
+      },
+    });
+    return { newUser, refreshToken };
   });
 
   const accessToken = newAccessToken(
@@ -93,15 +106,6 @@ export const signupAdminUser = async (
     newUser.role,
     newUser.companyId
   );
-  const { refreshToken, refreshTokenHash } = await newRefreshToken(newUser.id);
-
-  await prisma.user.update({
-    where: { id: newUser.id },
-    data: {
-      refreshTokenHash,
-      refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-    },
-  });
 
   return {
     user: newUser,
