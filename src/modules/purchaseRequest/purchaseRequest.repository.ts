@@ -46,6 +46,7 @@ export const findById = async (id: number, companyId: number) => {
     include: {
       items: {
         select: {
+          id: true,
           productName: true,
           price: true,
           quantity: true,
@@ -89,31 +90,38 @@ export const findAddApprovedRequests = async (
     },
     _sum: {
       totalAmount: true,
+      pointsUsed: true,
     },
   });
 };
 
 // 승인 반려 버튼 기능
-export const update = async ({
-  id,
-  companyId,
-  status,
-  resolverId,
-  resultMessage,
-}: {
-  id: number;
-  companyId: number;
-  status: 'APPROVED' | 'REJECTED';
-  resolverId: string;
-  resultMessage?: string;
-}) => {
-  return await prisma.purchaseRequest.updateMany({
+export const update = async (
+  tx: Prisma.TransactionClient,
+  {
+    id,
+    companyId,
+    status,
+    resolverId,
+    resultMessage,
+    pointsUsed,
+  }: {
+    id: number;
+    companyId: number;
+    status: 'APPROVED' | 'REJECTED';
+    resolverId: string;
+    resultMessage?: string;
+    pointsUsed?: number;
+  }
+) => {
+  return await tx.purchaseRequest.updateMany({
     where: { id, companyId, status: 'PENDING' },
     data: {
       status,
       resolverId,
       resultMessage,
       resolvedAt: new Date(),
+      pointsUsed,
     },
   });
 };
