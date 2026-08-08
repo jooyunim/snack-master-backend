@@ -22,7 +22,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install
+        run: HUSKY=0 npm ci
 
       - name: Prisma Generate
         run: npx prisma generate
@@ -38,7 +38,7 @@ jobs:
                ".github/*" \
                ".coderabbit.yaml" \
                ".vscode/*" \
-               ".env" \
+               ".env"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
