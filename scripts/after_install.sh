@@ -3,10 +3,9 @@
 export NVM_DIR="/home/ec2-user/.nvm"
 source "$NVM_DIR/nvm.sh"
 
-APP_DIR=/home/ec2-user/snack-master-backend
+APP_DIR="/home/ec2-user/snack-master-backend"
 
-cd $APP_DIR
+cd "$APP_DIR"
 
-npm install
-
+npm ci
 npx prisma generate
