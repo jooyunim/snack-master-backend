@@ -33,7 +33,12 @@ jobs:
       - name: Create deployment zip
         run: |
           zip -r release.zip . \
-          -x "node_modules/*" ".git/*"
+           -x "node_modules/*" \
+              ".git/*" \
+               ".github/*" \
+               ".coderabbit.yaml" \
+               ".vscode/*" \
+               ".env" \
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
