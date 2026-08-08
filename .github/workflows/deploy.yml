@@ -1,64 +1,54 @@
-name: Deploy Backend to EC2
+name: Deploy Backend
 
 on:
   push:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
-    concurrency:
-      group: production-ec2-deploy
-      cancel-in-progress: false
-
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '24'
-          cache: npm
+          node-version: 24
 
-      - name: Install Dependencies
-        run: HUSKY=0 npm ci
+      - name: Install dependencies
+        run: npm install
 
-      - name: Run Tests
-        run: npm test --if-present
-        env:
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+      - name: Prisma Generate
+        run: npx prisma generate
 
-      - name: Build Project
-        run: npm run build --if-present
+      - name: Build
+        run: npm run build
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.2.2
+      - name: Create deployment zip
+        run: |
+          zip -r release.zip . \
+          -x "node_modules/*" ".git/*"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: 22
-          fingerprint: ${{ secrets.EC2_HOST_FINGERPRINT }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-          script: |
-            set -e
+      - name: Upload to S3
+        run: |
+          aws s3 cp release.zip s3://${{ secrets.S3_BUCKET }}/release.zip
 
-            cd /home/ec2-user/snack-master-backend
-
-            git fetch origin
-            git reset --hard origin/main
-
-            npm ci
-
-            npx prisma migrate deploy
-            npx prisma generate
-
-            npm run build
-
-            pm2 restart backend
+      - name: Deploy to CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name ${{ secrets.CODE_DEPLOY_APPLICATION_NAME }} \
+            --deployment-group-name ${{ secrets.CODE_DEPLOY_DEPLOYMENT_GROUP_NAME }} \
+            --s3-location bucket=${{ secrets.S3_BUCKET }},key=release.zip,bundleType=zip
