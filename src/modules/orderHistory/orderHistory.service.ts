@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { HttpError } from '../../middlewares/HttpError';
 import { orderHistoryRepository } from './orderHistory.repository';
 import type { OrderSort } from './orderHistory.constants';
+import { PointType } from '@prisma/client';
 
 const getOrderBy = (
   sort: OrderSort
@@ -57,6 +58,12 @@ export const getOrderById = async (companyId: number, orderId: number) => {
     throw new HttpError(404, '구매 내역을 찾을 수 없습니다.');
   }
 
+  const pointsUsed = order.pointsUsed;
+  const pointsEarned =
+    order.pointTransactions.find((tx) => tx.type === PointType.EARN)?.amount ??
+    0;
+  const paidAmount = order.totalAmount - pointsUsed;
+
   return {
     id: order.id,
     requestedAt: order.requestedAt,
@@ -67,7 +74,9 @@ export const getOrderById = async (companyId: number, orderId: number) => {
     requestMessage: order.requestMessage,
     resultMessage: order.resultMessage, // 승인/반려 메시지
     shippingFee: order.shippingFee,
-    pointsUsed: order.pointsUsed,
+    pointsUsed,
+    pointsEarned,
+    paidAmount,
     totalAmount: order.totalAmount,
     items: order.items, // 품목 스냅샷
   };

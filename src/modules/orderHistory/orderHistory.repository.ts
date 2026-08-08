@@ -50,6 +50,9 @@ export const orderHistoryRepository = {
             quantity: true,
           },
         },
+        pointTransactions: {
+          select: { type: true, amount: true },
+        },
       },
     }),
 };
