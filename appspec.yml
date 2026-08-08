@@ -5,7 +5,8 @@ os: linux
 files:
   - source: /
     destination: /home/ec2-user/snack-master-backend
-    overwrite: true
+
+file_exists_behavior: OVERWRITE
 
 hooks:
   BeforeInstall:
