@@ -16,6 +16,14 @@ node -v
 echo "=== NPM VERSION ==="
 npm -v
 
+echo "=== APP DIR ==="
+echo "$APP_DIR"
+
+cd "$APP_DIR"
+
+echo "=== CURRENT DIRECTORY ==="
+pwd
+
 echo "=== NODE_MODULES CHECK ==="
 if [ -d "node_modules" ]; then
     echo "SUCCESS: node_modules directory exists!"
