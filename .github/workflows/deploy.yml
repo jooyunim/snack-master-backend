@@ -30,15 +30,28 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify node_modules
+        run: |
+          echo "=== NODE_MODULES SIZE ==="
+          du -sh node_modules
+          echo "=== CHECK IMPORTANT PACKAGES ==="
+          npm ls --depth=0
+
       - name: Create deployment zip
         run: |
           zip -r release.zip . \
-           -x "node_modules/*" \
-              ".git/*" \
+           -x  ".git/*" \
                ".github/*" \
                ".coderabbit.yaml" \
                ".vscode/*" \
                ".env"
+
+      - name: Verify deployment zip
+        run: |
+          echo "=== ZIP SIZE ==="
+          ls -lh release.zip
+          echo "=== CHECK node_modules IN ZIP ==="
+          unzip -l release.zip | grep "node_modules/" | head
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
