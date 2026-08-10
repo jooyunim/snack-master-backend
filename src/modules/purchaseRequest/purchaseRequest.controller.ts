@@ -104,6 +104,14 @@ export const getMyPurchaseRequests = async (
     const page = Number(req.query.page ?? 1);
     const pageSize = Number(req.query.pageSize ?? 10);
 
+    const sortBy = String(req.query.sortBy ?? 'recent');
+
+    const allowedSortValues = ['recent', 'price_asc', 'price_desc'];
+
+    if (!allowedSortValues.includes(sortBy)) {
+      throw new HttpError(400, '올바르지 않은 정렬 기준입니다.');
+    }
+
     if (!Number.isInteger(page) || page < 1) {
       throw new HttpError(400, 'page는 1 이상의 정수여야 합니다.');
     }
@@ -115,7 +123,8 @@ export const getMyPurchaseRequests = async (
     const data = await purchaseRequestService.getMyPurchaseRequests(
       req.user!.userId,
       page,
-      pageSize
+      pageSize,
+      sortBy
     );
 
     res.status(200).json({
