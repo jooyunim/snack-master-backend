@@ -65,12 +65,12 @@ export const signupAdminUser = async (
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const { newUser, refreshToken } = await prisma.$transaction(async (tx) => {
+  const newUser = await prisma.$transaction(async (tx) => {
     const newCompany = await tx.company.create({
       data: { name: companyName, businessNumber, defaultMonthlyBudget: 0 },
     });
 
-    const newUser = await tx.user.create({
+    const createdNewUser = await tx.user.create({
       data: {
         email,
         name,
@@ -87,31 +87,10 @@ export const signupAdminUser = async (
       },
     });
 
-    const { refreshToken, refreshTokenHash } = await newRefreshToken(
-      newUser.id
-    );
-
-    await tx.user.update({
-      where: { id: newUser.id },
-      data: {
-        refreshTokenHash,
-        refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-      },
-    });
-    return { newUser, refreshToken };
+    return createdNewUser;
   });
 
-  const accessToken = newAccessToken(
-    newUser.id,
-    newUser.role,
-    newUser.companyId
-  );
-
-  return {
-    user: newUser,
-    accessToken,
-    refreshToken,
-  };
+  return newUser;
 };
 
 export const signupUser = async (token: string, password: string) => {
