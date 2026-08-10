@@ -8,11 +8,24 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
+    const page = Number(req.query.page ?? 1);
+    const pageSize = Number(req.query.pageSize ?? 10);
+
+    if (!Number.isInteger(page) || page < 1) {
+      throw new HttpError(400, 'page는 1 이상의 정수여야 합니다.');
+    }
+
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
+      throw new HttpError(400, 'pageSize는 1 이상 50 이하의 정수여야 합니다.');
+    }
+
     const sortBy = (req.query.sortBy as string) || 'recent';
     const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(
       companyId,
-      sortBy
+      sortBy,
+      page,
+      pageSize
     );
     return res.status(200).json({ success: true, data: requests });
   } catch (err) {
