@@ -12,10 +12,9 @@ import { HttpError } from '../../middlewares/HttpError';
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: true,
   sameSite: 'lax' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
-  path: '/',
 };
 
 export const getEmailName = async (
