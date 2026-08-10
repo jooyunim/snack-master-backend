@@ -1,4 +1,4 @@
-import { PointType, PurchaseRequestStatus } from '@prisma/client';
+import { PointType, Prisma, PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import * as purchaseRequestRepository from './purchaseRequest.repository';
@@ -264,11 +264,19 @@ export const getDetail = async (id: number, companyId: number) => {
 export const getMyPurchaseRequests = async (
   userId: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  sortBy: string
 ) => {
   const where = {
     requesterId: userId,
   };
+
+  const orderBy: Prisma.PurchaseRequestOrderByWithRelationInput[] =
+    sortBy === 'price_asc'
+      ? [{ totalAmount: 'asc' }, { id: 'asc' }]
+      : sortBy === 'price_desc'
+        ? [{ totalAmount: 'desc' }, { id: 'asc' }]
+        : [{ requestedAt: 'desc' }, { id: 'asc' }];
 
   const [purchaseRequests, total] = await prisma.$transaction([
     prisma.purchaseRequest.findMany({
@@ -276,9 +284,7 @@ export const getMyPurchaseRequests = async (
       include: {
         items: true,
       },
-      orderBy: {
-        requestedAt: 'desc',
-      },
+      orderBy,
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

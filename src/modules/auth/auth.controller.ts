@@ -41,7 +41,7 @@ export const signupAdmin = async (
   try {
     const { email, name, password, companyName, businessNumber } = req.body;
 
-    const { refreshToken, ...signupData } = await signupAdminUser(
+    const user = await signupAdminUser(
       email,
       name,
       password,
@@ -49,11 +49,7 @@ export const signupAdmin = async (
       businessNumber
     );
 
-    res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-    res.status(201).json({
-      success: true,
-      ...signupData,
-    });
+    res.status(201).json({ success: true, data: user });
   } catch (error) {
     next(error);
   }
