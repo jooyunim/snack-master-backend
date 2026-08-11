@@ -13,7 +13,7 @@ const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const newAccessToken = (userId: string, role: Role, companyId: number) => {
   const accessToken = jwt.sign({ userId, role, companyId }, JWT_SECRET, {
-    expiresIn: '1d',
+    expiresIn: '2m', // 테스트 후 15m~30m 으로 변경
   });
   return accessToken;
 };
