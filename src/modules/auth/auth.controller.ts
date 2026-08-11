@@ -18,6 +18,10 @@ const REFRESH_COOKIE_OPTIONS = {
   path: '/',
 };
 
+/** 쿠키 전달 실험용 — 토큰 원문 전체는 찍지 않음. 실험 후 제거 */
+const maskToken = (token?: string) =>
+  token ? `${token.slice(0, 8)}...(${token.length})` : null;
+
 export const getEmailName = async (
   req: Request,
   res: Response,
@@ -82,6 +86,12 @@ export const login = async (
 
     const { refreshToken, ...loginData } = await loginUser(email, password);
 
+    /** 쿠키 전달 실험용 — 토큰 원문 전체는 찍지 않음. 실험 후 제거 */
+    console.log('[cookie-experiment][login] Set-Cookie refreshToken', {
+      masked: maskToken(refreshToken),
+      cookieOptions: REFRESH_COOKIE_OPTIONS,
+    });
+
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
     res.status(200).json({ success: true, ...loginData });
   } catch (error) {
@@ -103,8 +113,9 @@ export const logout = async (
 
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: process.env.COOKIE_SECURE === 'true',
+      sameSite: 'lax' as const,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
 
@@ -131,6 +142,13 @@ export const refresh = async (
   try {
     const { refreshToken } = req.cookies;
 
+    /** 쿠키 전달 실험용 — 토큰 원문 전체는 찍지 않음. 실험 후 제거 */
+    console.log('[cookie-experiment][refresh] incoming cookies', {
+      cookieKeys: Object.keys(req.cookies ?? {}),
+      hasRefreshToken: Boolean(refreshToken),
+      masked: maskToken(refreshToken),
+    });
+
     if (!refreshToken) {
       throw new HttpError(
         401,
@@ -141,6 +159,11 @@ export const refresh = async (
 
     const { refreshToken: newRefreshToken, ...tokenData } =
       await refreshAccessToken(refreshToken);
+
+    /** 쿠키 전달 실험용 — 토큰 원문 전체는 찍지 않음. 실험 후 제거 */
+    console.log('[cookie-experiment][refresh] rotated refreshToken', {
+      masked: maskToken(newRefreshToken),
+    });
 
     res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
     res.status(200).json({ success: true, data: tokenData });
