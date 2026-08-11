@@ -83,13 +83,13 @@ export const rejectRequest = async (
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
     const { resultMessage } = req.body;
-    await purchaseRequestService.rejectRequest({
+    const result = await purchaseRequestService.rejectRequest({
       id,
       companyId,
       resolverId,
       resultMessage,
     });
-    return res.status(200).json({ success: true, message: '반려되었습니다.' });
+    return res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

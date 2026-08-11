@@ -43,6 +43,15 @@ export const approveRequest = async ({
       throw new HttpError(404, '요청을 찾을 수 없습니다.');
     }
 
+    // 포인트는 회사 전체가 공유하는 잔액(getCompanyBalancePointService와 동일 계산)이라,
+    // 동시에 두 요청이 승인되면 둘 다 잔액 체크를 통과해 초과 사용될 수 있다. Budget 차감과
+    // 동일하게 FOR UPDATE로 이 회사의 포인트 내역 행을 잠가 동시 승인을 직렬화한다.
+    // ponytail: 이 회사에 포인트 내역이 단 한 건도 없으면(신규 회사, 최초 승인) 잠글 행이
+    // 없어 이 보호가 적용되지 않는다 — PointBalance 같은 별도 잔액 행을 두면 해소 가능.
+    await tx.$queryRaw`
+      SELECT id FROM "PointTransaction" WHERE "companyId" = ${companyId} FOR UPDATE
+    `;
+
     const findPointAmount = await tx.pointTransaction.groupBy({
       by: ['type'],
       where: { companyId },
@@ -221,7 +230,7 @@ export const getDetail = async (id: number, companyId: number) => {
   );
 
   if (!budget) {
-    throw new HttpError(500, '예산을 찾을 수 없습니다.');
+    throw new HttpError(404, '이번 달 예산이 설정되어 있지 않습니다.');
   }
 
   const addApproved = await purchaseRequestRepository.findAddApprovedRequests(
