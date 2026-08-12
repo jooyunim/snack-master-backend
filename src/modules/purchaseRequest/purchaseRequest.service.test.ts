@@ -34,21 +34,30 @@ const rawBudget = (overrides: Partial<Record<string, unknown>> = {}) => ({
 });
 
 describe('getRequests', () => {
+  beforeEach(() => {
+    (prisma.purchaseRequest.count as jest.Mock).mockResolvedValue(0);
+  });
+
   it('companyId로 스코프하고, 상품이 1개면 그 상품명만 itemSummary로 반환한다', async () => {
     (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([
       rawRequest(),
     ]);
 
-    const result = await getRequests(1, 'recent');
+    const result = await getRequests(1, 'recent', 1, 10);
 
     expect(prisma.purchaseRequest.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { companyId: 1, status: 'PENDING' },
         orderBy: { requestedAt: 'desc' },
+        skip: 0,
+        take: 10,
       })
     );
-    expect(result[0].itemSummary).toBe('허니버터칩');
-    expect(result[0].requesterName).toBe('김스낵');
+    expect(prisma.purchaseRequest.count).toHaveBeenCalledWith({
+      where: { companyId: 1, status: 'PENDING' },
+    });
+    expect(result.items[0].itemSummary).toBe('허니버터칩');
+    expect(result.items[0].requesterName).toBe('김스낵');
   });
 
   it('상품이 여러 개면 "첫 상품명 외 N개" 형태로 요약한다', async () => {
@@ -61,23 +70,40 @@ describe('getRequests', () => {
       }),
     ]);
 
-    const result = await getRequests(1, 'recent');
+    const result = await getRequests(1, 'recent', 1, 10);
 
-    expect(result[0].itemSummary).toBe('허니버터칩 외 1개');
+    expect(result.items[0].itemSummary).toBe('허니버터칩 외 1개');
   });
 
   it('sortBy에 따라 orderBy가 바뀐다', async () => {
     (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([]);
 
-    await getRequests(1, 'price_asc');
+    await getRequests(1, 'price_asc', 1, 10);
     expect(prisma.purchaseRequest.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { totalAmount: 'asc' } })
     );
 
-    await getRequests(1, 'price_desc');
+    await getRequests(1, 'price_desc', 1, 10);
     expect(prisma.purchaseRequest.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ orderBy: { totalAmount: 'desc' } })
     );
+  });
+
+  it('page/pageSize로 skip을 계산하고 totalPages를 함께 반환한다', async () => {
+    (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([]);
+    (prisma.purchaseRequest.count as jest.Mock).mockResolvedValue(25);
+
+    const result = await getRequests(1, 'recent', 3, 10);
+
+    expect(prisma.purchaseRequest.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ skip: 20, take: 10 })
+    );
+    expect(result.pagination).toEqual({
+      page: 3,
+      pageSize: 10,
+      total: 25,
+      totalPages: 3,
+    });
   });
 });
 

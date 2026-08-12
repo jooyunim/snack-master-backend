@@ -3,10 +3,19 @@ import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import * as purchaseRequestRepository from './purchaseRequest.repository';
 
-export const getRequests = async (companyId: number, sortBy: string) => {
-  const requests = await purchaseRequestRepository.findMany(companyId, sortBy);
+export const getRequests = async (
+  companyId: number,
+  sortBy: string,
+  page: number,
+  pageSize: number
+) => {
+  const skip = (page - 1) * pageSize;
+  const [requests, total] = await Promise.all([
+    purchaseRequestRepository.findMany(companyId, sortBy, skip, pageSize),
+    purchaseRequestRepository.count(companyId),
+  ]);
 
-  return requests.map((request) => {
+  const items = requests.map((request) => {
     const itemSummary =
       request.items.length > 1
         ? `${request.items[0].productName} 외 ${request.items.length - 1}개`
@@ -19,6 +28,16 @@ export const getRequests = async (companyId: number, sortBy: string) => {
       itemSummary,
     };
   });
+
+  return {
+    items,
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.ceil(total / pageSize),
+    },
+  };
 };
 
 export const approveRequest = async ({

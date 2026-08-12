@@ -49,10 +49,11 @@ describe('GET /purchase-requests (관리자 목록)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('ADMIN이면 200과 {success:true, data} 형태로 응답한다', async () => {
+  it('ADMIN이면 200과 {success:true, data:{items,pagination}} 형태로 응답한다', async () => {
     (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([
       rawRequest(),
     ]);
+    (prisma.purchaseRequest.count as jest.Mock).mockResolvedValue(1);
 
     const res = await request(app)
       .get('/purchase-requests')
@@ -60,7 +61,27 @@ describe('GET /purchase-requests (관리자 목록)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data[0].itemSummary).toBe('허니버터칩');
+    expect(res.body.data.items[0].itemSummary).toBe('허니버터칩');
+    expect(res.body.data.pagination).toEqual({
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
+  it('page가 1 미만이면 400', async () => {
+    const res = await request(app)
+      .get('/purchase-requests?page=0')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('pageSize가 50을 초과하면 400', async () => {
+    const res = await request(app)
+      .get('/purchase-requests?pageSize=51')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(400);
   });
 });
 
