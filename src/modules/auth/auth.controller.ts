@@ -12,7 +12,7 @@ import { HttpError } from '../../middlewares/HttpError';
 
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
+  secure: process.env.COOKIE_SECURE === 'true',
   sameSite: 'lax' as const,
   maxAge: 7 * 24 * 60 * 60 * 1000,
   path: '/',
@@ -103,8 +103,9 @@ export const logout = async (
 
     res.clearCookie('refreshToken', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
+      secure: process.env.COOKIE_SECURE === 'true',
+      sameSite: 'lax' as const,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
     });
 
