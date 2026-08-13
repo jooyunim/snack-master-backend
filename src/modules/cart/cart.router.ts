@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { Role } from '@prisma/client';
 import { authenticate, authorize } from '../../middlewares/auth.middleware';
 import {
+  addToCart,
   createPurchaseRequest,
   deleteCart,
   getCart,
@@ -15,6 +16,7 @@ import {
   validateQuery,
 } from '../../middlewares/validate.middleware';
 import {
+  addToCartSchema,
   createPurchaseRequestSchema,
   deleteCartSchema,
   getCartOrderQuerySchema,
@@ -58,5 +60,7 @@ router.post(
   validateBody(instantPurchaseSchema),
   instantPurchase
 );
+//장바구니에 상품 추가
+router.post('/', authenticate, validateBody(addToCartSchema), addToCart);
 
 export default router;

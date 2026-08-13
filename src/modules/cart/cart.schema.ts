@@ -42,8 +42,17 @@ export const updateCartSchema = z.object({
   cartItemIds: cartItemIds('수량을 변경할 상품을 선택해주세요.'),
   quantity: z
     .number({ error: 'quantity는 숫자여야 합니다.' })
-    .min(1, 'quantity는 1 이상이어야 합니다.')
-    .int({ error: 'quantity는 정수여야 합니다.' }),
+    .int({ error: 'quantity는 정수여야 합니다.' })
+    .min(10, 'quantity는 10 이상이어야 합니다.')
+    .max(100, 'quantity는 100 이하이어야 합니다.')
+    .refine(
+      (quantity) =>
+        [10, 20, 30, 40, 50, 60, 70, 80, 90, 100].includes(quantity),
+      {
+        message:
+          'quantity는 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 중 하나여야 합니다.',
+      }
+    ),
 });
 
 export const getCartOrderQuerySchema = z.object({
@@ -74,4 +83,19 @@ export const getCartOrderQuerySchema = z.object({
       },
       { message: 'cartItemIds는 중복 없는 양의 정수 목록이어야 합니다.' }
     ),
+});
+
+export const addToCartSchema = z.object({
+  productId: z
+    .number({ error: 'productId는 숫자여야 합니다.' })
+    .int({ error: 'productId는 정수여야 합니다.' })
+    .positive({ error: 'productId는 1 이상의 양수여야 합니다.' }),
+  quantity: z
+    .number({ error: 'quantity는 숫자여야 합니다.' })
+    .int({ error: 'quantity는 정수여야 합니다.' })
+    .min(10, 'quantity는 10 이상이어야 합니다.')
+    .max(50, 'quantity는 50 이하이어야 합니다.')
+    .refine((quantity) => [10, 20, 30, 40, 50].includes(quantity), {
+      message: 'quantity는 10, 20, 30, 40, 50 중 하나여야 합니다.',
+    }),
 });

@@ -581,3 +581,43 @@ export const instantPurchaseService = async (
 
   return order;
 };
+
+export const newCartItem = async (
+  userId: string,
+  companyId: number,
+  productId: number,
+  quantity: number
+) => {
+  const product = await prisma.product.findFirst({
+    where: { id: productId, deletedAt: null, companyId },
+  });
+
+  if (!product) {
+    throw new HttpError(404, '상품을 찾을 수 없습니다.');
+  }
+
+  const existingCartItem = await prisma.cartItem.findUnique({
+    where: { userId_productId: { userId, productId } },
+  });
+
+  const totalQuantity = (existingCartItem?.quantity ?? 0) + quantity;
+
+  if (totalQuantity > 100) {
+    throw new HttpError(
+      400,
+      `상품당 최대 100개까지 담을 수 있습니다. 현재 본 상품의 개수는 ${existingCartItem?.quantity}개입니다.`
+    );
+  }
+
+  const cartItem = await prisma.cartItem.upsert({
+    where: { userId_productId: { userId, productId } },
+    create: { userId, productId, quantity },
+    update: { quantity: { increment: quantity } },
+    select: {
+      id: true,
+      quantity: true,
+    },
+  });
+
+  return cartItem;
+};
