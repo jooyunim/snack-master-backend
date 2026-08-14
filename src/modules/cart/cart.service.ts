@@ -605,7 +605,7 @@ export const newCartItem = async (
   if (totalQuantity > 100) {
     throw new HttpError(
       400,
-      `상품당 최대 100개까지 담을 수 있습니다. 현재 본 상품의 개수는 ${existingCartItem?.quantity}개입니다.`
+      `상품당 최대 100개까지 담을 수 있습니다. \n현재 상품의 개수는 ${existingCartItem?.quantity}개입니다.`
     );
   }
 
