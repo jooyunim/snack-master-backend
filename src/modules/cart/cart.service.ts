@@ -3,6 +3,7 @@ import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 
 const SHIPPING_FEE = 3000;
+const MAX_CART_ITEM_QUANTITY = 100;
 
 const buildImageUrl = (s3Key: string) => {
   if (s3Key.startsWith('http://') || s3Key.startsWith('https://')) {
@@ -582,6 +583,37 @@ export const instantPurchaseService = async (
   return order;
 };
 
+const incrementCartItemQuantity = async (
+  userId: string,
+  productId: number,
+  quantity: number
+) => {
+  //조건부 update: 동시성 제어 => {count: 1/0}
+  const { count } = await prisma.cartItem.updateMany({
+    where: {
+      userId,
+      productId,
+      //상품당 최대 100개까지 담을 수 있도록 제한
+      quantity: { lte: MAX_CART_ITEM_QUANTITY - quantity },
+    },
+    //상품 개수만큼 증가
+    data: { quantity: { increment: quantity } },
+  });
+
+  //1: 행 있고, 현재+추가 <= 100 => 성공함
+  if (count !== 1) return null;
+
+  //방금 올린 장바구니 행 다시 조회
+  const cartItem = await prisma.cartItem.findUnique({
+    where: { userId_productId: { userId, productId } },
+    select: { id: true, quantity: true },
+  });
+
+  if (!cartItem) return null;
+
+  return cartItem;
+};
+
 export const newCartItem = async (
   userId: string,
   companyId: number,
@@ -596,28 +628,43 @@ export const newCartItem = async (
     throw new HttpError(404, '상품을 찾을 수 없습니다.');
   }
 
-  const existingCartItem = await prisma.cartItem.findUnique({
-    where: { userId_productId: { userId, productId } },
-  });
+  //이미 장바구니에 있어서 수량만 수정
+  const updatedCartItem = await incrementCartItemQuantity(
+    userId,
+    productId,
+    quantity
+  );
+  if (updatedCartItem) return updatedCartItem;
 
-  const totalQuantity = (existingCartItem?.quantity ?? 0) + quantity;
-
-  if (totalQuantity > 100) {
-    throw new HttpError(
-      400,
-      `상품당 최대 100개까지 담을 수 있습니다. \n현재 상품의 개수는 ${existingCartItem?.quantity}개입니다.`
-    );
+  try {
+    //장바구니에 없으면 새로 생성
+    return await prisma.cartItem.create({
+      data: { userId, productId, quantity },
+      select: { id: true, quantity: true },
+    });
+  } catch (error) {
+    // P2002: unique(userId, productId) 충돌 => 빈 장바구니에 두 요청이 동시에 create하면 한쪽만 성공한다.
+    // 진 쪽은 방금 생긴 장바구니 행에 조건부 update를 아래에서 다시 시도한다.(retried)
+    if (
+      !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+      error.code !== 'P2002' //이미 장바구니에 있으니깐 수량 증가로 바꾸기
+    ) {
+      throw error;
+    }
   }
 
-  const cartItem = await prisma.cartItem.upsert({
+  // 다음 요청은 먼저 만든 장바구니에 수량 증가 재시도
+  const retried = await incrementCartItemQuantity(userId, productId, quantity);
+  if (retried) return retried;
+
+  // 재시도 update 실패해서 100개 초과 에러 보여주려고(updateMany는 현재 수량 안 돌려주니깐)
+  const existingCartItem = await prisma.cartItem.findUnique({
     where: { userId_productId: { userId, productId } },
-    create: { userId, productId, quantity },
-    update: { quantity: { increment: quantity } },
-    select: {
-      id: true,
-      quantity: true,
-    },
+    select: { quantity: true },
   });
 
-  return cartItem;
+  throw new HttpError(
+    400,
+    `상품당 최대 100개까지 담을 수 있습니다. \n현재 상품의 개수는 ${existingCartItem?.quantity ?? 0}개입니다.`
+  );
 };
