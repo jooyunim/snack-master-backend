@@ -5,6 +5,7 @@ import {
   getCartItems,
   getCartOrderItems,
   instantPurchaseService,
+  newCartItem,
   purchaseItems,
   updateCartItems,
 } from './cart.service';
@@ -129,6 +130,26 @@ export const instantPurchase = async (
       cartItemIds
     );
     res.status(201).json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const addToCart = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { productId, quantity } = req.body;
+
+    const cartItem = await newCartItem(
+      req.user!.userId,
+      req.user!.companyId,
+      productId,
+      quantity
+    );
+    res.status(200).json({ success: true, data: cartItem });
   } catch (err) {
     next(err);
   }
