@@ -16,7 +16,12 @@ const getOrderBy = (
   }
 };
 //구매 요청 목록
-export const findMany = async (companyId: number, sortBy: string) => {
+export const findMany = async (
+  companyId: number,
+  sortBy: string,
+  skip: number,
+  take: number
+) => {
   const orderBy = getOrderBy(sortBy);
   return await prisma.purchaseRequest.findMany({
     where: {
@@ -24,6 +29,8 @@ export const findMany = async (companyId: number, sortBy: string) => {
       status: 'PENDING',
     },
     orderBy,
+    skip,
+    take,
     include: {
       items: {
         select: {
@@ -36,6 +43,13 @@ export const findMany = async (companyId: number, sortBy: string) => {
         },
       },
     },
+  });
+};
+
+//구매 요청 목록 총 개수
+export const count = async (companyId: number) => {
+  return await prisma.purchaseRequest.count({
+    where: { companyId, status: 'PENDING' },
   });
 };
 
