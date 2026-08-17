@@ -567,8 +567,8 @@ const BUDGET_MONTHS = 6;
 /** 배송비 제외 실결제액(상품합계 - 포인트사용)의 1% 적립 (내림) */
 const EARN_RATE = 0.01;
 
-/** 회사당 멤버 구성 (합 80) */
-const SUPER_ADMINS_PER_COMPANY = 2;
+/** 회사당 멤버 구성 (합 79) */
+const SUPER_ADMINS_PER_COMPANY = 1;
 const ADMINS_PER_COMPANY = 4;
 const USERS_PER_COMPANY = 74;
 
