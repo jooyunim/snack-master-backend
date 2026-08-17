@@ -1,3 +1,5 @@
+//요청메세지 스키마 검증
+
 import {
   REQUEST_MESSAGE_MAX_LENGTH,
   createPurchaseRequestSchema,
