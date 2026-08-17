@@ -685,6 +685,34 @@ function monthDate(now: Date, monthsAgo: number, day = 10): Date {
   return new Date(now.getFullYear(), now.getMonth() - monthsAgo, day, 12, 0, 0);
 }
 
+/** requestedAt < resolvedAt <= now 보장 */
+function requestResolvedDates(
+  now: Date,
+  monthsAgo: number,
+  seq: number
+): { requestedAt: Date; resolvedAt: Date } {
+  const maxDay = monthsAgo === 0 ? now.getDate() : 28;
+  const requestedDay = Math.min(5 + (seq % 20), maxDay);
+  const day = Math.max(1, requestedDay);
+
+  let requestedAt = monthDate(now, monthsAgo, day);
+  if (requestedAt > now) {
+    requestedAt = new Date(now);
+    requestedAt.setHours(12, 0, 0, 0);
+  }
+
+  let resolvedAt = new Date(requestedAt);
+  resolvedAt.setDate(requestedAt.getDate() + 1 + (seq % 3));
+  if (resolvedAt > now) {
+    resolvedAt = new Date(now);
+  }
+  if (resolvedAt <= requestedAt) {
+    requestedAt = new Date(resolvedAt.getTime() - 60 * 60 * 1000);
+  }
+
+  return { requestedAt, resolvedAt };
+}
+
 function pickProducts(
   products: DbProduct[],
   seed: number,
@@ -988,10 +1016,11 @@ async function main() {
           plan.status === PurchaseRequestStatus.APPROVED
             ? prSeq % BUDGET_MONTHS
             : 0;
-        const requestedDay = 5 + (prSeq % 20);
-        const requestedAt = monthDate(now, monthsAgo, requestedDay);
-        const resolvedAt = new Date(requestedAt);
-        resolvedAt.setDate(requestedAt.getDate() + 1 + (prSeq % 3));
+        const { requestedAt, resolvedAt } = requestResolvedDates(
+          now,
+          monthsAgo,
+          prSeq
+        );
 
         const isResolved =
           plan.status === PurchaseRequestStatus.APPROVED ||
