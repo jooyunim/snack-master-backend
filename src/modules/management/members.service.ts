@@ -15,6 +15,9 @@ export const getMembers = async (
   const where = {
     companyId,
     deletedAt: null,
+    role: {
+      not: Role.SUPER_ADMIN,
+    },
     ...(search && {
       OR: [
         { name: { contains: search, mode: 'insensitive' as const } },
@@ -63,6 +66,9 @@ export const updateMemberRole = async (
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (target.companyId !== companyId)
     throw new HttpError(403, '접근 권한이 없습니다.');
+  if (target.role === Role.SUPER_ADMIN) {
+    throw new HttpError(400, '최고 관리자는 탈퇴할 수 없습니다.');
+  }
 
   await prisma.user.update({
     where: { id: targetId },
@@ -86,6 +92,9 @@ export const deleteMember = async (
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (target.companyId !== companyId)
     throw new HttpError(403, '접근 권한이 없습니다.');
+  if (target.role === Role.SUPER_ADMIN) {
+    throw new HttpError(400, '최고 관리자는 탈퇴할 수 없습니다.');
+  }
 
   // 실제 삭제 대신 deletedAt 기록 (소프트 삭제)
   await prisma.user.update({
