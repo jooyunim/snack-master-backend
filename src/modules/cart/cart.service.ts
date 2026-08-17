@@ -343,7 +343,7 @@ export const createPurchaseRequestService = async (
   userId: string,
   companyId: number,
   cartItemIds: number[],
-  requestMessage?: string
+  requestMessage: string
 ) => {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });

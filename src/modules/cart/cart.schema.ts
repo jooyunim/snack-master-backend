@@ -19,11 +19,18 @@ export const deleteCartSchema = z.object({
   cartItemIds: cartItemIds('삭제할 상품을 선택해주세요.'),
 });
 
+export const REQUEST_MESSAGE_MAX_LENGTH = 500;
+
 export const createPurchaseRequestSchema = z.object({
   cartItemIds: cartItemIds('구매 요청할 상품을 선택해주세요.'),
   requestMessage: z
-    .string({ error: 'requestMessage는 문자열이어야 합니다.' })
-    .optional(),
+    .string({ error: '요청 메시지를 입력해주세요.' })
+    .trim()
+    .min(1, '요청 메시지를 입력해주세요.')
+    .max(
+      REQUEST_MESSAGE_MAX_LENGTH,
+      `요청 메시지는 ${REQUEST_MESSAGE_MAX_LENGTH}자 이하여야 합니다.`
+    ),
 });
 
 export const purchaseSchema = z.object({
