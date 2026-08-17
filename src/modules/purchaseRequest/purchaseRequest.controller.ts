@@ -27,6 +27,7 @@ export const getRequests = async (
       page,
       pageSize
     );
+
     return res.status(200).json({ success: true, data: requests });
   } catch (err) {
     next(err);
