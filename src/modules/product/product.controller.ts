@@ -4,6 +4,8 @@ import { HttpError } from '../../middlewares/HttpError';
 import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 
 const MAX_PAGE_SIZE = 50;
+const PRODUCT_NAME_MAX_LENGTH = 100;
+const PRODUCT_PRICE_MAX = 1_000_000_000;
 
 const parseLimit = (raw: unknown) => {
   const parsed = Number(raw);
@@ -115,10 +117,20 @@ export const createProduct = async (
   try {
     const { name, price, categoryId, linkUrl, s3Key, filename } = req.body;
 
-    if (!name || typeof name !== 'string' || !name.trim()) {
+    if (
+      !name ||
+      typeof name !== 'string' ||
+      !name.trim() ||
+      name.trim().length > PRODUCT_NAME_MAX_LENGTH
+    ) {
       throw new HttpError(400, '상품명을 입력해주세요.', 'name');
     }
-    if (typeof price !== 'number' || price <= 0) {
+    if (
+      typeof price !== 'number' ||
+      !Number.isInteger(price) ||
+      price <= 0 ||
+      price > PRODUCT_PRICE_MAX
+    ) {
       throw new HttpError(400, '가격을 올바르게 입력해주세요.', 'price');
     }
     if (!categoryId || typeof categoryId !== 'number') {
@@ -160,6 +172,24 @@ export const updateProduct = async (
     }
 
     const { name, price, categoryId, linkUrl, s3Key, filename } = req.body;
+
+    if (
+      name !== undefined &&
+      (typeof name !== 'string' ||
+        !name.trim() ||
+        name.trim().length > PRODUCT_NAME_MAX_LENGTH)
+    ) {
+      throw new HttpError(400, '상품명을 올바르게 입력해주세요.', 'name');
+    }
+    if (
+      price !== undefined &&
+      (typeof price !== 'number' ||
+        !Number.isInteger(price) ||
+        price <= 0 ||
+        price > PRODUCT_PRICE_MAX)
+    ) {
+      throw new HttpError(400, '가격을 올바르게 입력해주세요.', 'price');
+    }
 
     const data = await productService.updateProduct({
       id,
