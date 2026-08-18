@@ -140,7 +140,9 @@ describe('POST /products', () => {
 
   it.each([
     ['name', { ...validBody, name: '' }],
+    ['name', { ...validBody, name: 'a'.repeat(101) }],
     ['price', { ...validBody, price: 0 }],
+    ['price', { ...validBody, price: 1.5 }],
     ['categoryId', { ...validBody, categoryId: undefined }],
     ['linkUrl', { ...validBody, linkUrl: '' }],
     ['s3Key', { ...validBody, s3Key: undefined }],
