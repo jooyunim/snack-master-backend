@@ -567,8 +567,8 @@ const BUDGET_MONTHS = 6;
 /** 배송비 제외 실결제액(상품합계 - 포인트사용)의 1% 적립 (내림) */
 const EARN_RATE = 0.01;
 
-/** 회사당 멤버 구성 (합 80) */
-const SUPER_ADMINS_PER_COMPANY = 2;
+/** 회사당 멤버 구성 (합 79) */
+const SUPER_ADMINS_PER_COMPANY = 1;
 const ADMINS_PER_COMPANY = 4;
 const USERS_PER_COMPANY = 74;
 
@@ -683,6 +683,34 @@ function productSnapshot(
 
 function monthDate(now: Date, monthsAgo: number, day = 10): Date {
   return new Date(now.getFullYear(), now.getMonth() - monthsAgo, day, 12, 0, 0);
+}
+
+/** requestedAt < resolvedAt <= now 보장 */
+function requestResolvedDates(
+  now: Date,
+  monthsAgo: number,
+  seq: number
+): { requestedAt: Date; resolvedAt: Date } {
+  const maxDay = monthsAgo === 0 ? now.getDate() : 28;
+  const requestedDay = Math.min(5 + (seq % 20), maxDay);
+  const day = Math.max(1, requestedDay);
+
+  let requestedAt = monthDate(now, monthsAgo, day);
+  if (requestedAt > now) {
+    requestedAt = new Date(now);
+    requestedAt.setHours(12, 0, 0, 0);
+  }
+
+  let resolvedAt = new Date(requestedAt);
+  resolvedAt.setDate(requestedAt.getDate() + 1 + (seq % 3));
+  if (resolvedAt > now) {
+    resolvedAt = new Date(now);
+  }
+  if (resolvedAt <= requestedAt) {
+    requestedAt = new Date(resolvedAt.getTime() - 60 * 60 * 1000);
+  }
+
+  return { requestedAt, resolvedAt };
 }
 
 function pickProducts(
@@ -988,10 +1016,11 @@ async function main() {
           plan.status === PurchaseRequestStatus.APPROVED
             ? prSeq % BUDGET_MONTHS
             : 0;
-        const requestedDay = 5 + (prSeq % 20);
-        const requestedAt = monthDate(now, monthsAgo, requestedDay);
-        const resolvedAt = new Date(requestedAt);
-        resolvedAt.setDate(requestedAt.getDate() + 1 + (prSeq % 3));
+        const { requestedAt, resolvedAt } = requestResolvedDates(
+          now,
+          monthsAgo,
+          prSeq
+        );
 
         const isResolved =
           plan.status === PurchaseRequestStatus.APPROVED ||

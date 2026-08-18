@@ -165,6 +165,14 @@ export const purchaseItems = async (
       );
       const totalAmount = itemsTotal + SHIPPING_FEE;
 
+      // 포인트는 회사 공유 잔액이라, 승인(approveRequest)과 동시 구매 시 둘 다
+      // 잔액 체크를 통과해 초과 사용될 수 있다. 승인 경로와 동일하게 이 회사
+      // 포인트 내역 행을 잠가 직렬화한다.
+      // 이 회사에 포인트 내역이 없으면 잠글 행이 없어 이 보호가 적용되지 않는다.
+      await tx.$queryRaw`
+        SELECT id FROM "PointTransaction" WHERE "companyId" = ${companyId} FOR UPDATE
+      `;
+
       //회사 포인트 집계 : admin-adjust 집계 포함시키기
       const findPointAmount = await tx.pointTransaction.groupBy({
         by: ['type'],
@@ -343,7 +351,7 @@ export const createPurchaseRequestService = async (
   userId: string,
   companyId: number,
   cartItemIds: number[],
-  requestMessage?: string
+  requestMessage: string
 ) => {
   return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId } });

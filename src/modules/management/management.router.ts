@@ -19,13 +19,13 @@ membersRouter.post(
   inviteMember
 );
 membersRouter.patch(
-  '/:id',
+  '/:id/role',
   authenticate,
   authorize(Role.SUPER_ADMIN),
   updateMemberRole
 );
 membersRouter.patch(
-  '/:id/delete',
+  '/:id',
   authenticate,
   authorize(Role.SUPER_ADMIN),
   deleteMember
