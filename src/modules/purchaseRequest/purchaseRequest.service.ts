@@ -9,13 +9,11 @@ export const getRequests = async (
   page: number,
   pageSize: number
 ) => {
-  const requests = await purchaseRequestRepository.findMany(
-    companyId,
-    sortBy,
-    page,
-    pageSize
-  );
-  const total = await prisma.purchaseRequest.count({ where: { companyId } });
+  const skip = (page - 1) * pageSize;
+  const [requests, total] = await Promise.all([
+    purchaseRequestRepository.findMany(companyId, sortBy, skip, pageSize),
+    purchaseRequestRepository.count(companyId),
+  ]);
 
   const items = requests.map((request) => {
     const itemSummary =
@@ -30,13 +28,14 @@ export const getRequests = async (
       itemSummary,
     };
   });
+
   return {
     items,
     pagination: {
       page,
       pageSize,
       total,
-      totalPage: Math.ceil(total / pageSize),
+      totalPages: Math.ceil(total / pageSize),
     },
   };
 };
@@ -54,146 +53,152 @@ export const approveRequest = async ({
   resultMessage?: string;
   requestPointAmount: number;
 }) => {
-  const approved = await prisma.$transaction(
-    async (tx) => {
-      const request = await tx.purchaseRequest.findFirst({
-        where: { id, companyId, status: 'PENDING' },
-      });
+  const approved = await prisma.$transaction(async (tx) => {
+    const request = await tx.purchaseRequest.findFirst({
+      where: { id, companyId, status: 'PENDING' },
+    });
 
-      if (!request) {
-        throw new HttpError(404, '요청을 찾을 수 없습니다.');
-      }
+    if (!request) {
+      throw new HttpError(404, '요청을 찾을 수 없습니다.');
+    }
 
-      const findPointAmount = await tx.pointTransaction.groupBy({
-        by: ['type'],
-        where: { companyId },
-        _sum: { amount: true },
-      });
+    // 포인트는 회사 전체가 공유하는 잔액(getCompanyBalancePointService와 동일 계산)이라,
+    // 동시에 두 요청이 승인되면 둘 다 잔액 체크를 통과해 초과 사용될 수 있다. Budget 차감과
+    // 동일하게 FOR UPDATE로 이 회사의 포인트 내역 행을 잠가 동시 승인을 직렬화한다.
+    // ponytail: 이 회사에 포인트 내역이 단 한 건도 없으면(신규 회사, 최초 승인) 잠글 행이
+    // 없어 이 보호가 적용되지 않는다 — PointBalance 같은 별도 잔액 행을 두면 해소 가능.
+    await tx.$queryRaw`
+      SELECT id FROM "PointTransaction" WHERE "companyId" = ${companyId} FOR UPDATE
+    `;
 
-      const earnPointAmount = findPointAmount.find(
-        (item) => item.type === PointType.EARN
+    const findPointAmount = await tx.pointTransaction.groupBy({
+      by: ['type'],
+      where: { companyId },
+      _sum: { amount: true },
+    });
+
+    const earnPointAmount = findPointAmount.find(
+      (item) => item.type === PointType.EARN
+    );
+
+    const adminCreditPointAmount = findPointAmount.find(
+      (item) => item.type === PointType.ADMIN_CREDIT
+    );
+
+    const adminDebitPointAmount = findPointAmount.find(
+      (item) => item.type === PointType.ADMIN_DEBIT
+    );
+
+    const usePointAmount = findPointAmount.find(
+      (item) => item.type === PointType.USE
+    );
+
+    //포인트 잔액 계산
+    const balancePointAmount =
+      (earnPointAmount?._sum.amount ?? 0) +
+      (adminCreditPointAmount?._sum.amount ?? 0) -
+      (usePointAmount?._sum.amount ?? 0) -
+      (adminDebitPointAmount?._sum.amount ?? 0);
+
+    //포인트 사용액 결정
+    if (requestPointAmount > balancePointAmount) {
+      throw new HttpError(
+        400,
+        `포인트 잔액이 부족합니다. 포인트 잔액: ${balancePointAmount}원, 요청 포인트: ${requestPointAmount}원`
       );
+    }
 
-      const adminCreditPointAmount = findPointAmount.find(
-        (item) => item.type === PointType.ADMIN_CREDIT
+    if (requestPointAmount > request.totalAmount) {
+      throw new HttpError(
+        400,
+        `포인트 사용액은 총 결제 금액을 초과할 수 없습니다: ${request.totalAmount}원, 요청 포인트: ${requestPointAmount}원`
       );
+    }
+    const pointUsed = requestPointAmount;
 
-      const adminDebitPointAmount = findPointAmount.find(
-        (item) => item.type === PointType.ADMIN_DEBIT
-      );
+    //실제 총 결제 금액
+    const paidAmount = request.totalAmount - pointUsed;
 
-      const usePointAmount = findPointAmount.find(
-        (item) => item.type === PointType.USE
-      );
+    //배송비 뺀 실제 결제액
+    const paidAmountWithoutShippingFee = Math.max(
+      0,
+      request.totalAmount - request.shippingFee - pointUsed
+    );
 
-      //포인트 잔액 계산
-      const balancePointAmount =
-        (earnPointAmount?._sum.amount ?? 0) +
-        (adminCreditPointAmount?._sum.amount ?? 0) -
-        (usePointAmount?._sum.amount ?? 0) -
-        (adminDebitPointAmount?._sum.amount ?? 0);
+    //당월 예산 조회 => 부족하면 에러, 실 결제액만큼 예산 차감
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
 
-      //포인트 사용액 결정
-      if (requestPointAmount > balancePointAmount) {
-        throw new HttpError(
-          400,
-          `포인트 잔액이 부족합니다. 포인트 잔액: ${balancePointAmount}원, 요청 포인트: ${requestPointAmount}원`
-        );
-      }
-
-      if (requestPointAmount > request.totalAmount) {
-        throw new HttpError(
-          400,
-          `포인트 사용액은 총 결제 금액을 초과할 수 없습니다: ${request.totalAmount}원, 요청 포인트: ${requestPointAmount}원`
-        );
-      }
-      const pointUsed = requestPointAmount;
-
-      //실제 총 결제 금액
-      const paidAmount = request.totalAmount - pointUsed;
-
-      //배송비 뺀 실제 결제액
-      const paidAmountWithoutShippingFee = Math.max(
-        0,
-        request.totalAmount - request.shippingFee - pointUsed
-      );
-
-      //당월 예산 조회 => 부족하면 에러, 실 결제액만큼 예산 차감
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = now.getMonth() + 1;
-
-      const budgets = await tx.$queryRaw<{ id: number; amount: number }[]>`
+    const budgets = await tx.$queryRaw<{ id: number; amount: number }[]>`
       SELECT id, amount FROM "Budget"
       WHERE "companyId" = ${companyId} AND year = ${year} AND month = ${month}
       FOR UPDATE
     `;
 
-      const budget = budgets[0];
-      if (!budget) {
-        throw new HttpError(404, '이번 달 예산이 설정되어 있지 않습니다.');
-      }
+    const budget = budgets[0];
+    if (!budget) {
+      throw new HttpError(404, '이번 달 예산이 설정되어 있지 않습니다.');
+    }
 
-      if (budget.amount < paidAmount) {
-        throw new HttpError(
-          400,
-          `예산이 부족합니다. (남은 예산: ${budget.amount}원, 필요 금액: ${paidAmount}원)`
-        );
-      }
+    if (budget.amount < paidAmount) {
+      throw new HttpError(
+        400,
+        `예산이 부족합니다. (남은 예산: ${budget.amount}원, 필요 금액: ${paidAmount}원)`
+      );
+    }
 
-      await tx.budget.update({
-        where: { id: budget.id },
-        data: { amount: { decrement: paidAmount } },
+    await tx.budget.update({
+      where: { id: budget.id },
+      data: { amount: { decrement: paidAmount } },
+    });
+
+    if (pointUsed > 0) {
+      await tx.pointTransaction.create({
+        data: {
+          userId: request.requesterId,
+          companyId,
+          type: PointType.USE,
+          amount: pointUsed,
+          purchaseRequestId: id,
+        },
       });
+    }
 
-      if (pointUsed > 0) {
-        await tx.pointTransaction.create({
-          data: {
-            userId: request.requesterId,
-            companyId,
-            type: PointType.USE,
-            amount: pointUsed,
-            purchaseRequestId: id,
-          },
-        });
-      }
+    const reward = Math.floor(paidAmountWithoutShippingFee * 0.01);
 
-      const reward = Math.floor(paidAmountWithoutShippingFee * 0.01);
-
-      //적립액 > 0 : pointTransaction (type : earn 생성)
-      if (reward > 0) {
-        await tx.pointTransaction.create({
-          data: {
-            userId: request.requesterId,
-            companyId,
-            type: PointType.EARN,
-            amount: reward,
-            purchaseRequestId: id,
-          },
-        });
-      }
-
-      const result = await purchaseRequestRepository.update(tx, {
-        id,
-        companyId,
-        status: 'APPROVED',
-        resolverId,
-        resultMessage,
-        pointsUsed: pointUsed,
+    //적립액 > 0 : pointTransaction (type : earn 생성)
+    if (reward > 0) {
+      await tx.pointTransaction.create({
+        data: {
+          userId: request.requesterId,
+          companyId,
+          type: PointType.EARN,
+          amount: reward,
+          purchaseRequestId: id,
+        },
       });
-      if (result.count === 0) {
-        throw new HttpError(404, '요청을 찾을 수 없습니다.');
-      }
-      return {
-        id,
-        status: 'APPROVED',
-        pointUsed,
-        reward,
-        paidAmount,
-      };
-    },
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
-  );
+    }
+
+    const result = await purchaseRequestRepository.update(tx, {
+      id,
+      companyId,
+      status: 'APPROVED',
+      resolverId,
+      resultMessage,
+      pointsUsed: pointUsed,
+    });
+    if (result.count === 0) {
+      throw new HttpError(404, '요청을 찾을 수 없습니다.');
+    }
+    return {
+      id,
+      status: 'APPROVED',
+      pointUsed,
+      reward,
+      paidAmount,
+    };
+  });
   return approved;
 };
 
@@ -244,7 +249,7 @@ export const getDetail = async (id: number, companyId: number) => {
   );
 
   if (!budget) {
-    throw new HttpError(500, '예산을 찾을 수 없습니다.');
+    throw new HttpError(404, '이번 달 예산이 설정되어 있지 않습니다.');
   }
 
   const addApproved = await purchaseRequestRepository.findAddApprovedRequests(

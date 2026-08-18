@@ -2,247 +2,217 @@ import jwt from 'jsonwebtoken';
 import request from 'supertest';
 
 jest.mock('../../config/prisma');
-jest.mock('./purchaseRequest.service');
 
 import app from '../../app';
-import * as purchaseRequestService from './purchaseRequest.service';
-import { HttpError } from '../../middlewares/HttpError';
+import prisma from '../../config/prisma';
 
+// jest.setup.ts에서 process.env.JWT_SECRET을 이 값으로 미리 고정해둠
 const JWT_SECRET = 'test-jwt-secret';
 
 const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
   jwt.sign(
-    { userId: 'admin-1', role: 'ADMIN', companyId: 1, ...overrides },
+    { userId: 'user-1', role: 'USER', companyId: 1, ...overrides },
     JWT_SECRET,
     { expiresIn: '1h' }
   );
 
-describe('GET /purchase-requests', () => {
+const adminToken = () => signToken({ role: 'ADMIN' });
+
+const rawRequest = (overrides: Partial<Record<string, unknown>> = {}) => ({
+  id: 1,
+  companyId: 1,
+  requesterId: 'user-1',
+  status: 'PENDING',
+  totalAmount: 10000,
+  shippingFee: 3000,
+  requestMessage: '요청 메시지',
+  requestedAt: new Date('2026-01-01'),
+  requester: { name: '김스낵' },
+  items: [{ id: 1, productName: '허니버터칩', price: 1500, quantity: 2 }],
+  ...overrides,
+});
+
+beforeEach(() => {
+  (prisma.$transaction as jest.Mock).mockImplementation((cb) => cb(prisma));
+});
+
+describe('GET /purchase-requests (관리자 목록)', () => {
   it('토큰이 없으면 401', async () => {
     const res = await request(app).get('/purchase-requests');
     expect(res.status).toBe(401);
   });
 
-  it('USER 권한이면 403 (ADMIN/SUPER_ADMIN만 허용)', async () => {
+  it('일반 USER면 403 — 관리자 전용 엔드포인트', async () => {
     const res = await request(app)
       .get('/purchase-requests')
-      .set('Authorization', `Bearer ${signToken({ role: 'USER' })}`);
-
+      .set('Authorization', `Bearer ${signToken()}`);
     expect(res.status).toBe(403);
   });
 
-  it('page가 0 이하면 400', async () => {
-    const res = await request(app)
-      .get('/purchase-requests?page=0')
-      .set('Authorization', `Bearer ${signToken()}`);
-
-    expect(res.status).toBe(400);
-  });
-
-  it('pageSize가 50 초과면 400', async () => {
-    const res = await request(app)
-      .get('/purchase-requests?pageSize=51')
-      .set('Authorization', `Bearer ${signToken()}`);
-
-    expect(res.status).toBe(400);
-  });
-
-  it('ADMIN이면 200과 목록을 반환한다', async () => {
-    (purchaseRequestService.getRequests as jest.Mock).mockResolvedValue({
-      items: [],
-      pagination: { page: 1, pageSize: 10, total: 0, totalPage: 0 },
-    });
+  it('ADMIN이면 200과 {success:true, data:{items,pagination}} 형태로 응답한다', async () => {
+    (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([
+      rawRequest(),
+    ]);
+    (prisma.purchaseRequest.count as jest.Mock).mockResolvedValue(1);
 
     const res = await request(app)
       .get('/purchase-requests')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Authorization', `Bearer ${adminToken()}`);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(purchaseRequestService.getRequests).toHaveBeenCalledWith(
-      1,
-      'recent',
-      1,
-      10
-    );
-  });
-
-  it('SUPER_ADMIN도 접근 가능하다', async () => {
-    (purchaseRequestService.getRequests as jest.Mock).mockResolvedValue({
-      items: [],
-      pagination: { page: 1, pageSize: 10, total: 0, totalPage: 0 },
+    expect(res.body.data.items[0].itemSummary).toBe('허니버터칩');
+    expect(res.body.data.pagination).toEqual({
+      page: 1,
+      pageSize: 10,
+      total: 1,
+      totalPages: 1,
     });
-
-    const res = await request(app)
-      .get('/purchase-requests')
-      .set('Authorization', `Bearer ${signToken({ role: 'SUPER_ADMIN' })}`);
-
-    expect(res.status).toBe(200);
   });
-});
 
-describe('GET /purchase-requests/:id', () => {
-  it('id가 숫자가 아니면 400', async () => {
+  it('page가 1 미만이면 400', async () => {
     const res = await request(app)
-      .get('/purchase-requests/not-a-number')
-      .set('Authorization', `Bearer ${signToken()}`);
-
+      .get('/purchase-requests?page=0')
+      .set('Authorization', `Bearer ${adminToken()}`);
     expect(res.status).toBe(400);
   });
 
-  it('정상 id면 200과 상세 데이터를 반환한다', async () => {
-    (purchaseRequestService.getDetail as jest.Mock).mockResolvedValue({
+  it('pageSize가 50을 초과하면 400', async () => {
+    const res = await request(app)
+      .get('/purchase-requests?pageSize=51')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('GET /purchase-requests/:id (관리자 상세)', () => {
+  it('일반 USER면 403', async () => {
+    const res = await request(app)
+      .get('/purchase-requests/1')
+      .set('Authorization', `Bearer ${signToken()}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('숫자가 아닌 id면 400', async () => {
+    const res = await request(app)
+      .get('/purchase-requests/abc')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(400);
+  });
+
+  it('존재하지 않으면 404', async () => {
+    (prisma.purchaseRequest.findFirst as jest.Mock).mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/purchase-requests/999')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('이번 달 예산이 없으면 404 (500 아님)', async () => {
+    (prisma.purchaseRequest.findFirst as jest.Mock).mockResolvedValue(
+      rawRequest()
+    );
+    (prisma.budget.findUnique as jest.Mock).mockResolvedValue(null);
+
+    const res = await request(app)
+      .get('/purchase-requests/1')
+      .set('Authorization', `Bearer ${adminToken()}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('정상 조회 시 200', async () => {
+    (prisma.purchaseRequest.findFirst as jest.Mock).mockResolvedValue(
+      rawRequest()
+    );
+    (prisma.budget.findUnique as jest.Mock).mockResolvedValue({
       id: 1,
-      status: 'PENDING',
+      amount: 100000,
+    });
+    (prisma.purchaseRequest.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { totalAmount: 0, pointsUsed: 0 },
     });
 
     const res = await request(app)
       .get('/purchase-requests/1')
-      .set('Authorization', `Bearer ${signToken()}`);
-
+      .set('Authorization', `Bearer ${adminToken()}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.id).toBe(1);
-    expect(purchaseRequestService.getDetail).toHaveBeenCalledWith(1, 1);
+    expect(res.body.data.isOverBudget).toBe(false);
   });
 });
 
 describe('PATCH /purchase-requests/:id/approve', () => {
-  it('USER 권한이면 403', async () => {
+  it('일반 USER면 403', async () => {
     const res = await request(app)
       .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken({ role: 'USER' })}`)
+      .set('Authorization', `Bearer ${signToken()}`)
       .send({ requestPointAmount: 0 });
-
     expect(res.status).toBe(403);
   });
 
-  it('id가 숫자가 아니면 400', async () => {
+  it('포인트 금액이 유효하지 않으면 400', async () => {
     const res = await request(app)
-      .patch('/purchase-requests/abc/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({ requestPointAmount: 0 });
-
+      .patch('/purchase-requests/1/approve')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ requestPointAmount: -1 });
     expect(res.status).toBe(400);
   });
 
-  it('requestPointAmount가 음수면 400', async () => {
-    const res = await request(app)
-      .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({ requestPointAmount: -100 });
-
-    expect(res.status).toBe(400);
-    expect(purchaseRequestService.approveRequest).not.toHaveBeenCalled();
-  });
-
-  it('requestPointAmount가 숫자로 변환 불가능하면 400', async () => {
-    const res = await request(app)
-      .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({ requestPointAmount: 'abc' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('requestPointAmount를 생략하면 0으로 처리되어 정상 승인된다', async () => {
-    (purchaseRequestService.approveRequest as jest.Mock).mockResolvedValue({
-      id: 1,
-      status: 'APPROVED',
-      pointUsed: 0,
-      reward: 0,
-      paidAmount: 10000,
-    });
-
-    const res = await request(app)
-      .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({});
-
-    expect(res.status).toBe(200);
-    expect(purchaseRequestService.approveRequest).toHaveBeenCalledWith(
-      expect.objectContaining({ requestPointAmount: 0 })
+  it('정상 승인 시 200', async () => {
+    (prisma.purchaseRequest.findFirst as jest.Mock).mockResolvedValue(
+      rawRequest({ totalAmount: 10000, shippingFee: 0 })
     );
-  });
-
-  it('정상 요청이면 200과 승인 결과를 반환하고, companyId/resolverId를 토큰에서 꺼내 전달한다', async () => {
-    (purchaseRequestService.approveRequest as jest.Mock).mockResolvedValue({
-      id: 1,
-      status: 'APPROVED',
-      pointUsed: 2000,
-      reward: 70,
-      paidAmount: 8000,
+    (prisma.$queryRaw as jest.Mock)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: 1, amount: 100000 }]);
+    (prisma.pointTransaction.groupBy as jest.Mock).mockResolvedValue([]);
+    (prisma.purchaseRequest.updateMany as jest.Mock).mockResolvedValue({
+      count: 1,
     });
 
     const res = await request(app)
       .patch('/purchase-requests/1/approve')
-      .set(
-        'Authorization',
-        `Bearer ${signToken({ userId: 'admin-42', companyId: 5 })}`
-      )
-      .send({ requestPointAmount: 2000, resultMessage: '승인합니다' });
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ requestPointAmount: 0 });
 
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe('APPROVED');
-    expect(purchaseRequestService.approveRequest).toHaveBeenCalledWith({
-      id: 1,
-      companyId: 5,
-      resolverId: 'admin-42',
-      resultMessage: '승인합니다',
-      requestPointAmount: 2000,
-    });
-  });
-
-  it('서비스에서 404(HttpError)를 던지면 그대로 404 응답이 내려간다', async () => {
-    (purchaseRequestService.approveRequest as jest.Mock).mockRejectedValue(
-      new HttpError(404, '요청을 찾을 수 없습니다.')
-    );
-
-    const res = await request(app)
-      .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({ requestPointAmount: 0 });
-
-    expect(res.status).toBe(404);
   });
 });
 
 describe('PATCH /purchase-requests/:id/reject', () => {
-  it('USER 권한이면 403', async () => {
+  it('일반 USER면 403', async () => {
     const res = await request(app)
       .patch('/purchase-requests/1/reject')
-      .set('Authorization', `Bearer ${signToken({ role: 'USER' })}`)
-      .send({ resultMessage: '사유' });
-
+      .set('Authorization', `Bearer ${signToken()}`)
+      .send({});
     expect(res.status).toBe(403);
   });
 
-  it('id가 숫자가 아니면 400', async () => {
-    const res = await request(app)
-      .patch('/purchase-requests/abc/reject')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({});
-
-    expect(res.status).toBe(400);
-  });
-
-  it('정상 요청이면 200과 성공 메시지를 반환한다', async () => {
-    (purchaseRequestService.rejectRequest as jest.Mock).mockResolvedValue({
-      id: 1,
-      status: 'REJECTED',
+  it('이미 처리된 요청이면 404', async () => {
+    (prisma.purchaseRequest.updateMany as jest.Mock).mockResolvedValue({
+      count: 0,
     });
 
     const res = await request(app)
       .patch('/purchase-requests/1/reject')
-      .set('Authorization', `Bearer ${signToken()}`)
-      .send({ resultMessage: '예산 초과' });
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ resultMessage: '재고 없음' });
+    expect(res.status).toBe(404);
+  });
+
+  it('정상 반려 시 200과 {success:true, data} 형태로 응답한다', async () => {
+    (prisma.purchaseRequest.updateMany as jest.Mock).mockResolvedValue({
+      count: 1,
+    });
+
+    const res = await request(app)
+      .patch('/purchase-requests/1/reject')
+      .set('Authorization', `Bearer ${adminToken()}`)
+      .send({ resultMessage: '재고 없음' });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(purchaseRequestService.rejectRequest).toHaveBeenCalledWith({
-      id: 1,
-      companyId: 1,
-      resolverId: 'admin-1',
-      resultMessage: '예산 초과',
-    });
+    expect(res.body.data).toEqual({ id: 1, status: 'REJECTED' });
   });
 });

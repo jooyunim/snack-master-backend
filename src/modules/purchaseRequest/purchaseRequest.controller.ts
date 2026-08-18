@@ -20,6 +20,16 @@ export const getRequests = async (
     }
 
     const sortBy = (req.query.sortBy as string) || 'recent';
+    const page = Number(req.query.page ?? 1);
+    const pageSize = Number(req.query.pageSize ?? 10);
+
+    if (!Number.isInteger(page) || page < 1) {
+      throw new HttpError(400, 'page는 1 이상의 정수여야 합니다.');
+    }
+    if (!Number.isInteger(pageSize) || pageSize < 1 || pageSize > 50) {
+      throw new HttpError(400, 'pageSize는 1 이상 50 이하의 정수여야 합니다.');
+    }
+
     const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(
       companyId,
@@ -97,13 +107,13 @@ export const rejectRequest = async (
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
     const { resultMessage } = req.body;
-    await purchaseRequestService.rejectRequest({
+    const result = await purchaseRequestService.rejectRequest({
       id,
       companyId,
       resolverId,
       resultMessage,
     });
-    return res.status(200).json({ success: true, message: '반려되었습니다.' });
+    return res.status(200).json({ success: true, data: result });
   } catch (err) {
     next(err);
   }

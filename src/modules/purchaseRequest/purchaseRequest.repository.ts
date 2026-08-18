@@ -19,8 +19,8 @@ const getOrderBy = (
 export const findMany = async (
   companyId: number,
   sortBy: string,
-  page: number,
-  pageSize: number
+  skip: number,
+  take: number
 ) => {
   const orderBy = getOrderBy(sortBy);
   return await prisma.purchaseRequest.findMany({
@@ -29,8 +29,8 @@ export const findMany = async (
       status: 'PENDING',
     },
     orderBy,
-    skip: (page - 1) * pageSize,
-    take: pageSize,
+    skip,
+    take,
     include: {
       items: {
         select: {
@@ -43,6 +43,13 @@ export const findMany = async (
         },
       },
     },
+  });
+};
+
+//구매 요청 목록 총 개수
+export const count = async (companyId: number) => {
+  return await prisma.purchaseRequest.count({
+    where: { companyId, status: 'PENDING' },
   });
 };
 
