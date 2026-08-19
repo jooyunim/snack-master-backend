@@ -1,12 +1,8 @@
 import { PointType } from '@prisma/client';
-import prisma from '../../config/prisma';
+import { groupPointAmountsByType } from './point.repository';
 
 export const getCompanyBalancePointService = async (companyId: number) => {
-  const companyPoints = await prisma.pointTransaction.groupBy({
-    by: ['type'],
-    where: { companyId },
-    _sum: { amount: true },
-  });
+  const companyPoints = await groupPointAmountsByType(companyId);
 
   const earnPointAmount = companyPoints.find(
     (item) => item.type === PointType.EARN

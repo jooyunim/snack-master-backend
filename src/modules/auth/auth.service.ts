@@ -1,26 +1,45 @@
-import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import bcrypt from 'bcryptjs';
 import { Role } from '@prisma/client';
 import jwt, { JwtPayload, verify } from 'jsonwebtoken';
+import {
+  clearUserRefreshToken,
+  createAdminUserWithCompany,
+  createUserAndAcceptInvitation,
+  findInvitationByToken,
+  findUserByEmail,
+  findUserById,
+  updateUserRefreshToken,
+} from './auth.repository';
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
   throw new Error('JWT_SECRET 환경 변수가 설정되지 않았습니다.');
 }
 
-const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const toPublicUser = (user: {
+  id: string;
+  email: string;
+  name: string;
+  role: Role;
+  companyId: number;
+}) => ({
+  id: user.id,
+  email: user.email,
+  name: user.name,
+  role: user.role,
+  companyId: user.companyId,
+});
 
 const newAccessToken = (userId: string, role: Role, companyId: number) => {
-  const accessToken = jwt.sign({ userId, role, companyId }, JWT_SECRET, {
-    expiresIn: '5h',
+  return jwt.sign({ userId, role, companyId }, JWT_SECRET, {
+    expiresIn: '30m',
   });
-  return accessToken;
 };
 
 const newRefreshToken = async (userId: string) => {
   const refreshToken = jwt.sign({ userId }, JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn: '5d',
   });
 
   const refreshTokenHash = await bcrypt.hash(refreshToken, 10);
@@ -29,10 +48,7 @@ const newRefreshToken = async (userId: string) => {
 };
 
 export const getEmailNameService = async (token: string) => {
-  const invitation = await prisma.invitation.findUnique({
-    where: { token },
-    select: { email: true, name: true, status: true, expiresAt: true },
-  });
+  const invitation = await findInvitationByToken(token);
 
   if (!invitation) {
     throw new HttpError(404, '일치하는 초대가 존재하지 않습니다.');
@@ -56,48 +72,25 @@ export const signupAdminUser = async (
   companyName: string,
   businessNumber: string
 ) => {
-  const existingUser = await prisma.user.findUnique({
-    where: { email },
-  });
+  const existingUser = await findUserByEmail(email);
+
   if (existingUser) {
     throw new HttpError(400, '이미 가입된 이메일입니다.');
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const newUser = await prisma.$transaction(async (tx) => {
-    const newCompany = await tx.company.create({
-      data: { name: companyName, businessNumber, defaultMonthlyBudget: 0 },
-    });
-
-    const createdNewUser = await tx.user.create({
-      data: {
-        email,
-        name,
-        password: hashedPassword,
-        role: 'SUPER_ADMIN',
-        companyId: newCompany.id,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        companyId: true,
-      },
-    });
-
-    return createdNewUser;
+  return await createAdminUserWithCompany({
+    email,
+    name,
+    hashedPassword,
+    companyName,
+    businessNumber,
   });
-
-  return newUser;
 };
 
 export const signupUser = async (token: string, password: string) => {
-  const invitation = await prisma.invitation.findUnique({
-    where: { token },
-    include: { company: true },
-  });
+  const invitation = await findInvitationByToken(token);
 
   if (!invitation) {
     throw new HttpError(404, '일치하는 초대가 존재하지 않습니다.');
@@ -113,9 +106,8 @@ export const signupUser = async (token: string, password: string) => {
   }
 
   //중복 이메일 검증
-  const existingUser = await prisma.user.findFirst({
-    where: { email: invitation.email, deletedAt: null },
-  });
+  const existingUser = await findUserByEmail(invitation.email);
+
   if (existingUser) {
     throw new HttpError(409, '이미 가입된 이메일입니다.');
   }
@@ -124,47 +116,18 @@ export const signupUser = async (token: string, password: string) => {
   const hashedPassword = await bcrypt.hash(password, 10);
 
   // 유저 생성 + 초대 수락을 한 트랜잭션으로 처리 (한쪽만 성공하는 불일치 방지)
-  const results = await prisma.$transaction([
-    prisma.user.create({
-      data: {
-        email: invitation.email,
-        password: hashedPassword,
-        name: invitation.name,
-        role: invitation.role,
-        companyId: invitation.company.id,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        companyId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    }),
-    prisma.invitation.update({
-      where: { id: invitation.id },
-      data: { status: 'ACCEPTED' },
-    }),
-  ]);
-
-  const newUser = results[0];
-  return newUser;
+  return await createUserAndAcceptInvitation({
+    invitationId: invitation.id,
+    email: invitation.email,
+    hashedPassword,
+    name: invitation.name,
+    role: invitation.role,
+    companyId: invitation.company.id,
+  });
 };
 
 export const loginUser = async (email: string, password: string) => {
-  const user = await prisma.user.findFirst({
-    where: { email, deletedAt: null },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      companyId: true,
-      password: true,
-    },
-  });
+  const user = await findUserByEmail(email);
 
   if (!user) {
     const error = new HttpError(404, '일치하는 이메일이 존재하지 않습니다.');
@@ -183,22 +146,10 @@ export const loginUser = async (email: string, password: string) => {
   const accessToken = newAccessToken(user.id, user.role, user.companyId);
   const { refreshToken, refreshTokenHash } = await newRefreshToken(user.id);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      refreshTokenHash,
-      refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-    },
-  });
+  await updateUserRefreshToken(user.id, refreshTokenHash);
 
   return {
-    user: {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role,
-      companyId: user.companyId,
-    },
+    user: toPublicUser(user),
     accessToken,
     refreshToken,
   };
@@ -217,9 +168,7 @@ export const logoutUser = async (refreshToken: string) => {
     throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
-  const user = await prisma.user.findFirst({
-    where: { id: decoded.userId, deletedAt: null },
-  });
+  const user = await findUserById(decoded.userId);
 
   if (!user || !user.refreshTokenHash) {
     throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
@@ -234,29 +183,17 @@ export const logoutUser = async (refreshToken: string) => {
     );
   }
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { refreshTokenHash: null, refreshTokenExpiresAt: null },
-  });
+  await clearUserRefreshToken(user.id);
 };
 
 export const getUserService = async (userId: string) => {
-  const user = await prisma.user.findFirst({
-    where: { id: userId, deletedAt: null },
-    select: {
-      id: true,
-      email: true,
-      name: true,
-      role: true,
-      companyId: true,
-    },
-  });
+  const user = await findUserById(userId);
 
   if (!user) {
     throw new HttpError(404, '일치하는 유저가 존재하지 않습니다.');
   }
 
-  return user;
+  return toPublicUser(user);
 };
 
 export const refreshAccessToken = async (refreshToken: string) => {
@@ -272,9 +209,7 @@ export const refreshAccessToken = async (refreshToken: string) => {
     throw new HttpError(401, '유효하지 않은 토큰입니다.', 'refreshToken');
   }
 
-  const user = await prisma.user.findFirst({
-    where: { id: decoded.userId, deletedAt: null },
-  });
+  const user = await findUserById(decoded.userId);
 
   if (!user) {
     throw new HttpError(
@@ -302,27 +237,18 @@ export const refreshAccessToken = async (refreshToken: string) => {
     );
   }
 
-  if (
-    user.refreshTokenExpiresAt &&
-    user.refreshTokenExpiresAt < new Date(Date.now())
-  ) {
+  if (user.refreshTokenExpiresAt && user.refreshTokenExpiresAt < new Date()) {
     throw new HttpError(401, '리프레시 토큰이 만료되었습니다.', 'refreshToken');
   }
 
   const {
-    refreshToken: newRefreshTokenData,
-    refreshTokenHash: newRefreshTokenHashData,
+    refreshToken: nextRefreshToken,
+    refreshTokenHash: nextRefreshTokenHash,
   } = await newRefreshToken(user.id);
 
   const accessToken = newAccessToken(user.id, user.role, user.companyId);
 
-  await prisma.user.update({
-    where: { id: user.id },
-    data: {
-      refreshTokenHash: newRefreshTokenHashData,
-      refreshTokenExpiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
-    },
-  });
+  await updateUserRefreshToken(user.id, nextRefreshTokenHash);
 
-  return { accessToken, refreshToken: newRefreshTokenData };
+  return { accessToken, refreshToken: nextRefreshToken };
 };
