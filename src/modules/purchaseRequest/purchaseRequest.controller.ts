@@ -1,10 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import * as purchaseRequestService from './purchaseRequest.service';
 import { HttpError } from '../../middlewares/HttpError';
-import { getRequestsQuerySchema } from './purchaseRequest.schema';
-import z from 'zod';
-
-type GetRequestsQuery = z.infer<typeof getRequestsQuerySchema>;
+import {
+  GetRequestsQuery,
+  ApproveRequestBody,
+  RejectRequestBody,
+  RequestIdParams,
+} from './purchaseRequest.schema';
 
 export const getRequests = async (
   req: Request,
@@ -12,7 +14,7 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
-    const { sortBy, page, pageSize } = req.query as unknown as GetRequestsQuery;
+    const { sortBy, page, pageSize } = req.validated!.query as GetRequestsQuery;
     const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(
       companyId,
@@ -32,7 +34,7 @@ export const getRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params as unknown as { id: number };
+    const { id } = req.validated!.params as RequestIdParams;
     const companyId = req.user!.companyId;
     const request = await purchaseRequestService.getDetail(id, companyId);
     return res.status(200).json({ success: true, data: request });
@@ -47,10 +49,11 @@ export const approveRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params as unknown as { id: number };
+    const { id } = req.validated!.params as RequestIdParams;
+    const { resultMessage, requestPointAmount } = req.validated!
+      .body as ApproveRequestBody;
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
-    const { resultMessage, requestPointAmount } = req.body;
     const result = await purchaseRequestService.approveRequest({
       id,
       companyId,
@@ -71,10 +74,10 @@ export const rejectRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.params as unknown as { id: number };
+    const { id } = req.validated!.params as RequestIdParams;
+    const { resultMessage } = req.validated!.body as RejectRequestBody;
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
-    const { resultMessage } = req.body;
     const result = await purchaseRequestService.rejectRequest({
       id,
       companyId,

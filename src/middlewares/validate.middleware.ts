@@ -2,7 +2,7 @@ import { NextFunction, Request, Response } from 'express';
 import { ZodType } from 'zod';
 import { HttpError } from './HttpError';
 
-export const validateBody = (schema: ZodType) => {
+export const validateBody = <T>(schema: ZodType<T>) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.body);
 
@@ -13,12 +13,12 @@ export const validateBody = (schema: ZodType) => {
       );
     }
 
-    req.body = result.data;
+    req.validated = { ...req.validated, body: result.data };
     next();
   };
 };
 
-export const validateQuery = (schema: ZodType) => {
+export const validateQuery = <T>(schema: ZodType<T>) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.query);
 
@@ -28,16 +28,13 @@ export const validateQuery = (schema: ZodType) => {
         new HttpError(400, firstIssue?.message ?? '유효하지 않은 요청입니다.')
       );
     }
-    Object.defineProperty(req, 'query', {
-      value: result.data,
-      writable: true,
-      configurable: true,
-    });
+
+    req.validated = { ...req.validated, query: result.data };
     next();
   };
 };
 
-export const validateParams = (schema: ZodType) => {
+export const validateParams = <T>(schema: ZodType<T>) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.params);
 
@@ -48,7 +45,7 @@ export const validateParams = (schema: ZodType) => {
       );
     }
 
-    req.params = result.data as unknown as Request['params'];
+    req.validated = { ...req.validated, params: result.data };
     next();
   };
 };

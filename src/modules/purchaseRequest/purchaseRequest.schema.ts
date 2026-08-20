@@ -15,6 +15,8 @@ export const getRequestsQuerySchema = z.object({
   sortBy: z.enum(['recent', 'price_asc', 'price_desc']).default('recent'),
 });
 
+export type GetRequestsQuery = z.infer<typeof getRequestsQuerySchema>;
+
 export const approveRequestSchema = z.object({
   resultMessage: z
     .string()
@@ -26,6 +28,8 @@ export const approveRequestSchema = z.object({
     .default(0),
 });
 
+export type ApproveRequestBody = z.infer<typeof approveRequestSchema>;
+
 export const rejectRequestSchema = z.object({
   resultMessage: z
     .string()
@@ -33,9 +37,13 @@ export const rejectRequestSchema = z.object({
     .optional(),
 });
 
+export type RejectRequestBody = z.infer<typeof rejectRequestSchema>;
+
 export const requestIdParamSchema = z.object({
   id: z.coerce
     .number()
     .int('id는 올바른 형식이어야 합니다.')
     .positive('id는 올바른 형식이어야 합니다.'),
 });
+
+export type RequestIdParams = z.infer<typeof requestIdParamSchema>;
