@@ -1,9 +1,26 @@
 import { PointType, Prisma, PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
+import {
+  createCartItem,
+  createPointTransaction,
+  createPurchaseRequestWithItems,
+  decrementBudgetById,
+  deleteCartItemsByIds,
+  deleteCartItemsInTx,
+  findActiveProduct,
+  findBudgetByYearMonth,
+  findCartItemByUserAndProduct,
+  findCartItems,
+  findCartItemsForPurchase,
+  findUserById,
+  groupPointAmountsByType,
+  incrementProductsSold,
+  tryIncrementCartItemQuantity,
+  updateCartItemsByIds,
+} from './cart.repository';
 
 const SHIPPING_FEE = 3000;
-const MAX_CART_ITEM_QUANTITY = 100;
 
 const buildImageUrl = (s3Key: string) => {
   if (s3Key.startsWith('http://') || s3Key.startsWith('https://')) {
@@ -14,22 +31,7 @@ const buildImageUrl = (s3Key: string) => {
 };
 
 export const getCartItems = async (userId: string, companyId: number) => {
-  const cartItem = await prisma.cartItem.findMany({
-    where: { userId, product: { deletedAt: null } },
-    include: {
-      product: {
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          s3Key: true,
-          linkUrl: true,
-          companyId: true,
-        },
-      },
-    },
-    orderBy: { createdAt: 'desc' },
-  });
+  const cartItem = await findCartItems(userId);
 
   const item = cartItem.map((i) => {
     return {
@@ -46,9 +48,7 @@ export const getCartItems = async (userId: string, companyId: number) => {
   const year = now.getFullYear();
   const month = now.getMonth() + 1;
 
-  const budget = await prisma.budget.findFirst({
-    where: { companyId, year, month },
-  });
+  const budget = await findBudgetByYearMonth(companyId, year, month);
 
   if (!budget) {
     throw new HttpError(404, '이번 달 예산이 설정되어 있지 않습니다.');
@@ -66,37 +66,18 @@ export const updateCartItems = async (
   cartItemIds: number[],
   quantity: number
 ) => {
-  const updatedItems = await prisma.cartItem.updateMany({
-    where: { id: { in: cartItemIds }, userId },
-    data: { quantity },
-  });
-  return updatedItems;
+  return await updateCartItemsByIds(userId, cartItemIds, quantity);
 };
 
 export const deleteCartItem = async (userId: string, cartItemIds: number[]) => {
-  const deletedItems = await prisma.cartItem.deleteMany({
-    where: { id: { in: cartItemIds }, userId },
-  });
-  return deletedItems;
+  return await deleteCartItemsByIds(userId, cartItemIds);
 };
 
 export const getCartOrderItems = async (
   userId: string,
   cartItemIds: number[]
 ) => {
-  const cartItems = await prisma.cartItem.findMany({
-    where: { id: { in: cartItemIds }, userId, product: { deletedAt: null } },
-    include: {
-      product: {
-        select: {
-          id: true,
-          name: true,
-          price: true,
-          s3Key: true,
-        },
-      },
-    },
-  });
+  const cartItems = await findCartItems(userId, cartItemIds);
 
   const item = cartItems.map((i) => {
     return {
@@ -123,7 +104,7 @@ export const purchaseItems = async (
 ) => {
   const purchase = await prisma.$transaction(
     async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
+      const user = await findUserById(tx, userId);
 
       if (!user) {
         throw new HttpError(404, '사용자를 찾을 수 없습니다.');
@@ -133,24 +114,12 @@ export const purchaseItems = async (
         throw new HttpError(403, '회사 정보가 일치하지 않습니다.');
       }
 
-      const cartItems = await tx.cartItem.findMany({
-        where: {
-          id: { in: cartItemIds },
-          userId,
-          product: { deletedAt: null, companyId },
-        },
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              price: true,
-              s3Key: true,
-              deletedAt: true,
-            },
-          },
-        },
-      });
+      const cartItems = await findCartItemsForPurchase(
+        tx,
+        userId,
+        companyId,
+        cartItemIds
+      );
 
       if (cartItems.length !== cartItemIds.length) {
         throw new HttpError(
@@ -174,11 +143,7 @@ export const purchaseItems = async (
       `;
 
       //회사 포인트 집계 : admin-adjust 집계 포함시키기
-      const findPointAmount = await tx.pointTransaction.groupBy({
-        by: ['type'],
-        where: { companyId },
-        _sum: { amount: true },
-      });
+      const findPointAmount = await groupPointAmountsByType(tx, companyId);
 
       const earnPointAmount = findPointAmount.find(
         (item) => item.type === PointType.EARN
@@ -249,45 +214,35 @@ export const purchaseItems = async (
         );
       }
 
-      await tx.budget.update({
-        where: { id: budget.id },
-        data: { amount: { decrement: paidAmount } },
-      });
+      await decrementBudgetById(tx, budget.id, paidAmount);
 
       //구매 생성
-      const purchaseRequestAdmin = await tx.purchaseRequest.create({
-        data: {
-          companyId,
-          requesterId: userId,
-          resolverId: userId,
-          resolvedAt: now,
-          status: PurchaseRequestStatus.APPROVED,
-          totalAmount: totalAmount,
-          shippingFee: SHIPPING_FEE,
-          pointsUsed: pointUsed,
-          items: {
-            create: cartItems.map((item) => ({
-              productId: item.product.id,
-              productName: item.product.name,
-              price: item.product.price,
-              imageUrl: buildImageUrl(item.product.s3Key),
-              quantity: item.quantity,
-            })),
-          },
-        },
-        include: { items: true },
+      const purchaseRequestAdmin = await createPurchaseRequestWithItems(tx, {
+        companyId,
+        requesterId: userId,
+        resolverId: userId,
+        resolvedAt: now,
+        status: PurchaseRequestStatus.APPROVED,
+        totalAmount: totalAmount,
+        shippingFee: SHIPPING_FEE,
+        pointsUsed: pointUsed,
+        items: cartItems.map((item) => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          price: item.product.price,
+          imageUrl: buildImageUrl(item.product.s3Key),
+          quantity: item.quantity,
+        })),
       });
 
       //pointTransaction (type : use 생성)
       if (purchaseRequestAdmin.pointsUsed > 0) {
-        await tx.pointTransaction.create({
-          data: {
-            userId,
-            companyId,
-            type: PointType.USE,
-            amount: pointUsed,
-            purchaseRequestId: purchaseRequestAdmin.id,
-          },
+        await createPointTransaction(tx, {
+          userId,
+          companyId,
+          type: PointType.USE,
+          amount: pointUsed,
+          purchaseRequestId: purchaseRequestAdmin.id,
         });
       }
 
@@ -296,31 +251,26 @@ export const purchaseItems = async (
 
       //적립액 > 0 : pointTransaction (type : earn 생성)
       if (reward > 0) {
-        await tx.pointTransaction.create({
-          data: {
-            userId,
-            companyId,
-            type: PointType.EARN,
-            amount: reward,
-            purchaseRequestId: purchaseRequestAdmin.id,
-          },
+        await createPointTransaction(tx, {
+          userId,
+          companyId,
+          type: PointType.EARN,
+          amount: reward,
+          purchaseRequestId: purchaseRequestAdmin.id,
         });
       }
 
       //상품별 판매량 반영 : totalSold increment 증강
-      await Promise.all(
-        cartItems.map((item) =>
-          tx.product.update({
-            where: { id: item.product.id },
-            data: { totalSold: { increment: item.quantity } },
-          })
-        )
+      await incrementProductsSold(
+        tx,
+        cartItems.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        }))
       );
 
       // cartItem 삭제
-      await tx.cartItem.deleteMany({
-        where: { id: { in: cartItemIds }, userId },
-      });
+      await deleteCartItemsInTx(tx, userId, cartItemIds);
 
       return {
         id: purchaseRequestAdmin.id,
@@ -354,7 +304,7 @@ export const createPurchaseRequestService = async (
   requestMessage: string
 ) => {
   return prisma.$transaction(async (tx) => {
-    const user = await tx.user.findUnique({ where: { id: userId } });
+    const user = await findUserById(tx, userId);
 
     if (!user) {
       throw new HttpError(404, '사용자를 찾을 수 없습니다.');
@@ -364,23 +314,12 @@ export const createPurchaseRequestService = async (
       throw new HttpError(403, '회사 정보가 일치하지 않습니다.');
     }
 
-    const cartItems = await tx.cartItem.findMany({
-      where: {
-        id: { in: cartItemIds },
-        userId,
-        product: { deletedAt: null, companyId },
-      },
-      include: {
-        product: {
-          select: {
-            id: true,
-            name: true,
-            price: true,
-            s3Key: true,
-          },
-        },
-      },
-    });
+    const cartItems = await findCartItemsForPurchase(
+      tx,
+      userId,
+      companyId,
+      cartItemIds
+    );
 
     if (cartItems.length !== cartItemIds.length) {
       throw new HttpError(
@@ -395,30 +334,23 @@ export const createPurchaseRequestService = async (
     );
     const totalAmount = itemsTotal + SHIPPING_FEE;
 
-    const purchaseRequest = await tx.purchaseRequest.create({
-      data: {
-        companyId,
-        requesterId: userId,
-        requestMessage,
-        totalAmount,
-        shippingFee: SHIPPING_FEE,
-        items: {
-          create: cartItems.map((item) => ({
-            productId: item.product.id,
-            productName: item.product.name,
-            price: item.product.price,
-            imageUrl: buildImageUrl(item.product.s3Key),
-            quantity: item.quantity,
-          })),
-        },
-      },
-      include: { items: true },
+    const purchaseRequest = await createPurchaseRequestWithItems(tx, {
+      companyId,
+      requesterId: userId,
+      requestMessage,
+      totalAmount,
+      shippingFee: SHIPPING_FEE,
+      items: cartItems.map((item) => ({
+        productId: item.product.id,
+        productName: item.product.name,
+        price: item.product.price,
+        imageUrl: buildImageUrl(item.product.s3Key),
+        quantity: item.quantity,
+      })),
     });
 
     // 중복 요청 방지를 위해 요청에 포함된 장바구니 항목 삭제
-    await tx.cartItem.deleteMany({
-      where: { id: { in: cartItemIds }, userId },
-    });
+    await deleteCartItemsInTx(tx, userId, cartItemIds);
 
     return {
       id: purchaseRequest.id,
@@ -454,7 +386,7 @@ export const instantPurchaseService = async (
   // Serializable 트랜잭션 + SELECT FOR UPDATE로 동시 구매 시 예산 중복 차감 방지
   const order = await prisma.$transaction(
     async (tx) => {
-      const user = await tx.user.findUnique({ where: { id: userId } });
+      const user = await findUserById(tx, userId);
 
       if (!user) {
         throw new HttpError(404, '사용자를 찾을 수 없습니다.');
@@ -464,23 +396,12 @@ export const instantPurchaseService = async (
         throw new HttpError(403, '회사 정보가 일치하지 않습니다.');
       }
 
-      const cartItems = await tx.cartItem.findMany({
-        where: {
-          id: { in: cartItemIds },
-          userId,
-          product: { deletedAt: null, companyId },
-        },
-        include: {
-          product: {
-            select: {
-              id: true,
-              name: true,
-              price: true,
-              s3Key: true,
-            },
-          },
-        },
-      });
+      const cartItems = await findCartItemsForPurchase(
+        tx,
+        userId,
+        companyId,
+        cartItemIds
+      );
 
       if (cartItems.length !== cartItemIds.length) {
         throw new HttpError(
@@ -512,62 +433,49 @@ export const instantPurchaseService = async (
         );
       }
 
-      await tx.budget.update({
-        where: { id: budget.id },
-        data: { amount: { decrement: totalAmount } },
-      });
+      await decrementBudgetById(tx, budget.id, totalAmount);
 
-      const purchaseRequest = await tx.purchaseRequest.create({
-        data: {
-          companyId,
-          requesterId: userId,
-          resolverId: userId,
-          status: PurchaseRequestStatus.APPROVED,
-          totalAmount,
-          shippingFee: SHIPPING_FEE,
-          resolvedAt: now,
-          items: {
-            create: cartItems.map((item) => ({
-              productId: item.product.id,
-              productName: item.product.name,
-              price: item.product.price,
-              imageUrl: buildImageUrl(item.product.s3Key),
-              quantity: item.quantity,
-            })),
-          },
-        },
-        include: { items: true },
+      const purchaseRequest = await createPurchaseRequestWithItems(tx, {
+        companyId,
+        requesterId: userId,
+        resolverId: userId,
+        status: PurchaseRequestStatus.APPROVED,
+        totalAmount,
+        shippingFee: SHIPPING_FEE,
+        resolvedAt: now,
+        items: cartItems.map((item) => ({
+          productId: item.product.id,
+          productName: item.product.name,
+          price: item.product.price,
+          imageUrl: buildImageUrl(item.product.s3Key),
+          quantity: item.quantity,
+        })),
       });
 
       // 적립액 계산 : 실결제액의 1% 적립, 소수점 내림 적용
       const reward = Math.floor(totalAmount * 0.01);
 
       if (reward > 0) {
-        await tx.pointTransaction.create({
-          data: {
-            userId,
-            companyId,
-            type: PointType.EARN,
-            amount: reward,
-            purchaseRequestId: purchaseRequest.id,
-          },
+        await createPointTransaction(tx, {
+          userId,
+          companyId,
+          type: PointType.EARN,
+          amount: reward,
+          purchaseRequestId: purchaseRequest.id,
         });
       }
 
       // 상품별 판매량 반영
-      await Promise.all(
-        cartItems.map((item) =>
-          tx.product.update({
-            where: { id: item.product.id },
-            data: { totalSold: { increment: item.quantity } },
-          })
-        )
+      await incrementProductsSold(
+        tx,
+        cartItems.map((item) => ({
+          productId: item.product.id,
+          quantity: item.quantity,
+        }))
       );
 
       // cartItem 삭제
-      await tx.cartItem.deleteMany({
-        where: { id: { in: cartItemIds }, userId },
-      });
+      await deleteCartItemsInTx(tx, userId, cartItemIds);
 
       return {
         id: purchaseRequest.id,
@@ -597,25 +505,17 @@ const incrementCartItemQuantity = async (
   quantity: number
 ) => {
   //조건부 update: 동시성 제어 => {count: 1/0}
-  const { count } = await prisma.cartItem.updateMany({
-    where: {
-      userId,
-      productId,
-      //상품당 최대 100개까지 담을 수 있도록 제한
-      quantity: { lte: MAX_CART_ITEM_QUANTITY - quantity },
-    },
-    //상품 개수만큼 증가
-    data: { quantity: { increment: quantity } },
-  });
+  const { count } = await tryIncrementCartItemQuantity(
+    userId,
+    productId,
+    quantity
+  );
 
   //1: 행 있고, 현재+추가 <= 100 => 성공함
   if (count !== 1) return null;
 
   //방금 올린 장바구니 행 다시 조회
-  const cartItem = await prisma.cartItem.findUnique({
-    where: { userId_productId: { userId, productId } },
-    select: { id: true, quantity: true },
-  });
+  const cartItem = await findCartItemByUserAndProduct(userId, productId);
 
   if (!cartItem) return null;
 
@@ -628,10 +528,7 @@ export const newCartItem = async (
   productId: number,
   quantity: number
 ) => {
-  const product = await prisma.product.findFirst({
-    where: { id: productId, deletedAt: null, companyId },
-  });
-
+  const product = await findActiveProduct(productId, companyId);
   if (!product) {
     throw new HttpError(404, '상품을 찾을 수 없습니다.');
   }
@@ -646,10 +543,7 @@ export const newCartItem = async (
 
   try {
     //장바구니에 없으면 새로 생성
-    return await prisma.cartItem.create({
-      data: { userId, productId, quantity },
-      select: { id: true, quantity: true },
-    });
+    return await createCartItem(userId, productId, quantity);
   } catch (error) {
     // P2002: unique(userId, productId) 충돌 => 빈 장바구니에 두 요청이 동시에 create하면 한쪽만 성공한다.
     // 진 쪽은 방금 생긴 장바구니 행에 조건부 update를 아래에서 다시 시도한다.(retried)
@@ -666,10 +560,10 @@ export const newCartItem = async (
   if (retried) return retried;
 
   // 재시도 update 실패해서 100개 초과 에러 보여주려고(updateMany는 현재 수량 안 돌려주니깐)
-  const existingCartItem = await prisma.cartItem.findUnique({
-    where: { userId_productId: { userId, productId } },
-    select: { quantity: true },
-  });
+  const existingCartItem = await findCartItemByUserAndProduct(
+    userId,
+    productId
+  );
 
   throw new HttpError(
     400,
