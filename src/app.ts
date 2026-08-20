@@ -7,6 +7,10 @@ import morgan from 'morgan';
 
 import { HttpError } from './middlewares/HttpError';
 import errorMiddleware from './middlewares/error.middleware';
+import {
+  authRateLimit,
+  securityHeaders,
+} from './middlewares/security.middleware';
 import authRouter from './modules/auth/auth.router';
 import userRouter from './modules/user/user.router';
 import {
@@ -23,6 +27,9 @@ import cartRouter from './modules/cart/cart.router';
 import pointRouter from './modules/point/point.router';
 
 const app = express();
+
+app.disable('x-powered-by');
+app.use(securityHeaders);
 
 app.use(
   cors({
@@ -44,7 +51,7 @@ app.use(express.json());
 app.use(cookieParser());
 
 // 라우터 등록
-app.use('/auth', authRouter);
+app.use('/auth', authRateLimit, authRouter);
 app.use('/users', userRouter);
 app.use('/members', membersRouter);
 app.use('/budgets', budgetsRouter);
