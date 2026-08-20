@@ -1,8 +1,18 @@
 import crypto from 'crypto';
 import { Prisma, Role } from '@prisma/client';
-import prisma from '../../config/prisma';
 import { HttpError } from '../../middlewares/HttpError';
 import { Resend } from 'resend';
+import {
+  createInvitation,
+  findInvitationByEmail,
+  findMembersAndCount,
+  findUserByEmail,
+  findUserById,
+  renewInvitationByEmail,
+  updateInvitationNameAndRoleByEmail,
+  updateUserDeletedAtById,
+  updateUserRoleById,
+} from './members.repository';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -12,36 +22,12 @@ export const getMembers = async (
   pageSize: number,
   search?: string
 ) => {
-  const where = {
+  const [members, total] = await findMembersAndCount(
     companyId,
-    deletedAt: null,
-    role: {
-      not: Role.SUPER_ADMIN,
-    },
-    ...(search && {
-      OR: [
-        { name: { contains: search, mode: 'insensitive' as const } },
-        { email: { contains: search, mode: 'insensitive' as const } },
-      ],
-    }),
-  };
-
-  const [members, total] = await Promise.all([
-    prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-      orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.user.count({ where }),
-  ]);
+    page,
+    pageSize,
+    search
+  );
 
   return { members, total, page, pageSize };
 };
@@ -59,9 +45,7 @@ export const updateMemberRole = async (
     throw new HttpError(400, '최고 관리자 권한은 부여할 수 없습니다.');
   }
 
-  const target = await prisma.user.findUnique({
-    where: { id: targetId, deletedAt: null },
-  });
+  const target = await findUserById(targetId);
 
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (target.companyId !== companyId)
@@ -70,10 +54,7 @@ export const updateMemberRole = async (
     throw new HttpError(400, '최고 관리자는 탈퇴할 수 없습니다.');
   }
 
-  await prisma.user.update({
-    where: { id: targetId },
-    data: { role },
-  });
+  await updateUserRoleById(targetId, role);
 };
 
 export const deleteMember = async (
@@ -85,9 +66,7 @@ export const deleteMember = async (
     throw new HttpError(400, '본인 계정은 탈퇴 처리할 수 없습니다.');
   }
 
-  const target = await prisma.user.findUnique({
-    where: { id: targetId, deletedAt: null },
-  });
+  const target = await findUserById(targetId);
 
   if (!target) throw new HttpError(404, '사용자를 찾을 수 없습니다.');
   if (target.companyId !== companyId)
@@ -97,13 +76,8 @@ export const deleteMember = async (
   }
 
   // 실제 삭제 대신 deletedAt 기록 (소프트 삭제)
-  await prisma.user.update({
-    where: { id: targetId },
-    data: { deletedAt: new Date() },
-  });
+  await updateUserDeletedAtById(targetId);
 };
-
-const INVITE_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7일
 
 const assertInvitationOwnership = (
   invitation: { status: string; companyId: number },
@@ -124,12 +98,10 @@ export const inviteMember = async (
   name: string,
   role: Role
 ) => {
-  const existingUser = await prisma.user.findUnique({ where: { email } });
+  const existingUser = await findUserByEmail(email);
   if (existingUser) throw new HttpError(400, '이미 가입된 이메일입니다.');
 
-  const existingInvitation = await prisma.invitation.findUnique({
-    where: { email },
-  });
+  const existingInvitation = await findInvitationByEmail(email);
 
   let token: string;
 
@@ -143,40 +115,18 @@ export const inviteMember = async (
     if (isValidPending) {
       // 유효한 초대: 기존 토큰·만료 유지, 메일만 재발송
       token = existingInvitation.token;
-      await prisma.invitation.update({
-        where: { email },
-        data: { name, role },
-      });
+      await updateInvitationNameAndRoleByEmail(email, name, role);
     } else {
       // 만료 등: 토큰·만료 갱신 후 발송
       token = crypto.randomUUID();
-      await prisma.invitation.update({
-        where: { email },
-        data: {
-          invitedById,
-          name,
-          role,
-          token,
-          status: 'PENDING',
-          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-        },
-      });
+
+      await renewInvitationByEmail(email, invitedById, name, role, token);
     }
   } else {
     // 신규: create. 동시 초대는 email unique로 막고 소유권을 재확인
     token = crypto.randomUUID();
     try {
-      await prisma.invitation.create({
-        data: {
-          companyId,
-          invitedById,
-          email,
-          name,
-          role,
-          token,
-          expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-        },
-      });
+      await createInvitation(companyId, invitedById, email, name, role, token);
     } catch (error) {
       if (
         !(error instanceof Prisma.PrismaClientKnownRequestError) ||
@@ -185,9 +135,7 @@ export const inviteMember = async (
         throw error;
       }
 
-      const conflicted = await prisma.invitation.findUnique({
-        where: { email },
-      });
+      const conflicted = await findInvitationByEmail(email);
       if (!conflicted) throw error;
 
       assertInvitationOwnership(conflicted, companyId);
@@ -197,23 +145,10 @@ export const inviteMember = async (
 
       if (isValidPending) {
         token = conflicted.token;
-        await prisma.invitation.update({
-          where: { email },
-          data: { name, role },
-        });
+        await updateInvitationNameAndRoleByEmail(email, name, role);
       } else {
         token = crypto.randomUUID();
-        await prisma.invitation.update({
-          where: { email },
-          data: {
-            invitedById,
-            name,
-            role,
-            token,
-            status: 'PENDING',
-            expiresAt: new Date(Date.now() + INVITE_TTL_MS),
-          },
-        });
+        await renewInvitationByEmail(email, invitedById, name, role, token);
       }
     }
   }
