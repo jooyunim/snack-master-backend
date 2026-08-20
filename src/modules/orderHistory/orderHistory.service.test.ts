@@ -1,4 +1,3 @@
-import { HttpError } from '../../middlewares/HttpError';
 import { PointType, PurchaseRequestStatus } from '@prisma/client';
 
 jest.mock('./orderHistory.repository', () => ({
@@ -131,8 +130,8 @@ describe('getOrderById', () => {
   it('없으면 404를 던진다', async () => {
     (orderHistoryRepository.findById as jest.Mock).mockResolvedValue(null);
 
-    await expect(getOrderById(1, 999)).rejects.toThrow(HttpError);
     await expect(getOrderById(1, 999)).rejects.toMatchObject({
+      name: 'HttpError',
       statusCode: 404,
     });
   });
