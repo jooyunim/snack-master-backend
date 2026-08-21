@@ -93,6 +93,14 @@ describe('GET /products', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('100자를 초과한 검색어면 400', async () => {
+    const res = await request(app)
+      .get(`/products?search=${'a'.repeat(101)}`)
+      .set('Authorization', `Bearer ${signToken()}`);
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('GET /products/:id', () => {
