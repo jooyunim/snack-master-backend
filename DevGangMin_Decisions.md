@@ -1,4 +1,28 @@
-# 판단 근거 로그 (로컬 전용, 커밋 안 됨)
+# 개발 결정 기록
+
+## 상품 검색: Meilisearch 대신 RDS `pg_trgm` 선택 (2026-08-21)
+
+**결정**: 별도 Meilisearch 인스턴스는 도입하지 않고, RDS PostgreSQL의 `pg_trgm` 확장과 상품명 GIN 인덱스를 사용한다.
+
+**근거**:
+
+- 실제 백엔드는 서울 리전 EC2 `t3.micro`에서 PM2로 실행 중이며, 확인 시 사용 가능 메모리는 약 257 MiB, swap은 없고 루트 디스크 여유는 약 1.7 GiB였다. 같은 서버에 Meilisearch를 추가하면 인덱싱 중 백엔드까지 OOM으로 종료될 위험이 있다.
+- 새 EC2도 `t3.micro`만 사용할 수 있고, EBS 증설 비용도 허용되지 않았다. 별도 검색 서버 구성은 현재 비용·운영 제약을 만족하지 못한다.
+- RDS PostgreSQL은 `pg_trgm`을 지원한다. 기존 `GET /products?search=`의 Prisma 부분 검색(`ILIKE`)을 그대로 유지하면서, 활성 상품명에만 GIN trigram 인덱스를 적용할 수 있다. 별도 검색 데이터 동기화, API 키, Docker, 백업 운영이 추가되지 않는다.
+- 회사 ID와 `deletedAt` 필터는 기존 서비스 계층에서 계속 적용되므로, 검색 도입으로 회사 간 상품 노출 범위가 넓어지지 않는다.
+
+**구현 범위**:
+
+- 마이그레이션 `20260821120000_add_product_name_trigram_search`에서 `pg_trgm` 확장과 `Product_name_trgm_active_idx`를 생성한다.
+- 프론트는 `/products?q=...` URL 상태로 검색어를 보존하고, 기존 React Query 상품 목록 키에 검색어를 포함한다.
+- 검색어는 API 경계와 입력 필드에서 100자로 제한한다.
+
+**의도적 한계와 확장 경로**:
+
+- 이번 구현은 빠른 부분 검색까지다. 동의어·형태소 분석·복잡한 오타 순위 검색은 제공하지 않는다.
+- ponytail: 상품 수·검색 트래픽이 증가하거나 위 기능이 필요해지면, 충분한 메모리와 영구 볼륨을 갖춘 별도 Meilisearch/OpenSearch 인스턴스로 분리하고 DB 변경 이벤트 기반 재색인 작업을 추가한다.
+
+**배포 확인**: RDS 대상 환경에서 `prisma migrate deploy`가 `CREATE EXTENSION pg_trgm` 권한으로 성공하는지 확인한다. 상품 API 테스트 57개와 백엔드·프론트엔드 빌드는 로컬에서 통과했다.
 
 문제가 있을 수 있거나 오해의 여지가 있는 기술적 결정을 기록. 코드 주석이나 커밋 메시지 대신 여기에 남김.
 
