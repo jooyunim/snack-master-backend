@@ -24,6 +24,9 @@ cd "$APP_DIR"
 echo "=== CURRENT DIRECTORY ==="
 pwd
 
+echo "=== PRISMA MIGRATIONS ==="
+npx prisma migrate deploy
+
 echo "=== NODE_MODULES CHECK ==="
 if [ -d "node_modules" ]; then
     echo "SUCCESS: node_modules directory exists!"
