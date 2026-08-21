@@ -73,6 +73,8 @@ export const getOrderById = async (companyId: number, orderId: number) => {
     resolver: order.resolver,
     requestMessage: order.requestMessage,
     resultMessage: order.resultMessage, // 승인/반려 메시지
+    refundReason: order.refundReason,
+    refundedAt: order.refundedAt,
     shippingFee: order.shippingFee,
     pointsUsed,
     pointsEarned,
