@@ -32,3 +32,6 @@ else
     # node_modules가 없으면 배포 실패로 처리
     exit 1
 fi
+
+echo "=== PRISMA MIGRATIONS ==="
+npx prisma migrate deploy

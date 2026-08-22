@@ -14,16 +14,13 @@ interface JwtPayload {
   companyId: number;
 }
 
-// Authorization 헤더(Bearer) 또는 쿠키에서 토큰 꺼내서 검증
+// 쿠키에서 토큰 꺼내서 검증
 export const authenticate = (
   req: Request,
   res: Response,
   next: NextFunction
 ) => {
-  const authHeader = req.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice(7)
-    : req.cookies?.accessToken;
+  const token = req.cookies?.accessToken;
 
   if (!token) {
     return next(new HttpError(401, '인증이 필요합니다.'));
