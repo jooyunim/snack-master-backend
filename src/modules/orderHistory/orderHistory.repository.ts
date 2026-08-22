@@ -1,8 +1,11 @@
 import { Prisma, PurchaseRequestStatus } from '@prisma/client';
 import prisma from '../../config/prisma';
 
-// 구매 내역 = 승인 완료 건만
-const APPROVED = PurchaseRequestStatus.APPROVED;
+// 구매 내역 = 승인 완료 + 환불 건
+const ORDER_HISTORY_STATUSES: PurchaseRequestStatus[] = [
+  PurchaseRequestStatus.APPROVED,
+  PurchaseRequestStatus.REFUNDED,
+];
 
 export const orderHistoryRepository = {
   findMany: (
@@ -13,7 +16,7 @@ export const orderHistoryRepository = {
   ) => {
     const where: Prisma.PurchaseRequestWhereInput = {
       companyId,
-      status: APPROVED,
+      status: { in: ORDER_HISTORY_STATUSES },
     };
 
     return Promise.all([
@@ -34,10 +37,14 @@ export const orderHistoryRepository = {
     ]);
   },
 
-  // 상세 조회 (같은 회사 + 승인 완료만)
+  // 상세 조회 (같은 회사 + 승인 완료/환불)
   findById: (companyId: number, orderId: number) =>
     prisma.purchaseRequest.findFirst({
-      where: { id: orderId, companyId, status: APPROVED },
+      where: {
+        id: orderId,
+        companyId,
+        status: { in: ORDER_HISTORY_STATUSES },
+      },
       include: {
         requester: { select: { id: true, name: true, email: true } },
         resolver: { select: { id: true, name: true } },
