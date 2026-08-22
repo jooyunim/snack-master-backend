@@ -5,6 +5,7 @@ import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 
 const MAX_PAGE_SIZE = 50;
 const PRODUCT_NAME_MAX_LENGTH = 100;
+const PRODUCT_SEARCH_MAX_LENGTH = 100;
 const PRODUCT_PRICE_MAX = 1_000_000_000;
 const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const IMAGE_FILENAME_PATTERN = /^[^\\/]+\.(?:jpe?g|png|webp)$/i;
@@ -47,12 +48,20 @@ export const getProducts = async (
       throw new HttpError(400, '유효하지 않은 정렬 기준입니다.');
     }
 
+    const normalizedSearch =
+      typeof search === 'string' ? search.trim() : undefined;
+    if (
+      normalizedSearch &&
+      normalizedSearch.length > PRODUCT_SEARCH_MAX_LENGTH
+    ) {
+      throw new HttpError(400, '검색어는 100자 이하로 입력해주세요.', 'search');
+    }
+
     const data = await productService.listProducts({
       companyId: req.user!.companyId,
       userId: req.user!.userId,
       categoryId: parsedCategoryId,
-      search:
-        typeof search === 'string' && search.trim() ? search.trim() : undefined,
+      search: normalizedSearch || undefined,
       sort: sortValue,
       cursor: typeof cursor === 'string' ? cursor : undefined,
       limit: parseLimit(limit),
