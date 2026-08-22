@@ -31,13 +31,17 @@ const toPublicUser = (user: {
   companyId: user.companyId,
 });
 
-const newAccessToken = (userId: string, role: Role, companyId: number) => {
+export const newAccessToken = (
+  userId: string,
+  role: Role,
+  companyId: number
+) => {
   return jwt.sign({ userId, role, companyId }, JWT_SECRET, {
-    expiresIn: '30m',
+    expiresIn: '15m',
   });
 };
 
-const newRefreshToken = async (userId: string) => {
+export const newRefreshToken = async (userId: string) => {
   const refreshToken = jwt.sign({ userId }, JWT_SECRET, {
     expiresIn: '5d',
   });
