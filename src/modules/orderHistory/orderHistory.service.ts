@@ -36,6 +36,7 @@ export const getOrders = async (
     id: row.id,
     requestedAt: row.requestedAt, // 구매 요청일
     resolvedAt: row.resolvedAt, // 구매 승인일
+    refundedAt: row.refundedAt, //구매 환불일
     requesterName: row.requester.name, // 요청인
     resolverName: row.resolver?.name ?? null, // 담당자
     items: row.items.map((item) => ({
