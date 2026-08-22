@@ -1,22 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { PointType } from '@prisma/client';
 import { HttpError } from '../../middlewares/HttpError';
 import { orderHistoryRepository } from './orderHistory.repository';
 import type { OrderSort } from './orderHistory.constants';
-import { PointType } from '@prisma/client';
-
-const getOrderBy = (
-  sort: OrderSort
-): Prisma.PurchaseRequestOrderByWithRelationInput => {
-  switch (sort) {
-    case 'amountAsc':
-      return { totalAmount: 'asc' };
-    case 'amountDesc':
-      return { totalAmount: 'desc' };
-    case 'latest':
-    default:
-      return { resolvedAt: 'desc' };
-  }
-};
 
 // 구매 내역 목록 + 페이지네이션
 export const getOrders = async (
@@ -29,7 +14,7 @@ export const getOrders = async (
     companyId,
     (page - 1) * pageSize,
     pageSize,
-    getOrderBy(sort)
+    sort
   );
 
   const orders = rows.map((row) => ({
