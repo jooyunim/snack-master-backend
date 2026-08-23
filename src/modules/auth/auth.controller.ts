@@ -10,11 +10,12 @@ import {
 } from './auth.service';
 import { HttpError } from '../../middlewares/HttpError';
 
+// Express res.cookie maxAge는 밀리초 (브라우저 Max-Age 초 단위와 다름)
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.COOKIE_SECURE === 'true',
   sameSite: 'lax' as const,
-  maxAge: 5 * 24 * 60 * 60,
+  maxAge: 5 * 24 * 60 * 60 * 1000, // 5일
   path: '/',
 };
 
@@ -22,7 +23,7 @@ const ACCESS_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.COOKIE_SECURE === 'true',
   sameSite: 'lax' as const,
-  maxAge: 15 * 60,
+  maxAge: 15 * 60 * 1000, // 15분
   path: '/',
 };
 
