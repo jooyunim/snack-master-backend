@@ -39,7 +39,9 @@ jobs:
 
       - name: Create deployment zip
         run: |
-          zip -r release.zip . \
+          # -y: .bin 심볼릭 링크를 파일 복사 대신 링크로 저장
+          # (그렇지 않으면 prisma CLI가 .bin에서 wasm을 찾다 ENOENT)
+          zip -ry release.zip . \
            -x  ".git/*" \
                ".github/*" \
                ".coderabbit.yaml" \
@@ -52,6 +54,8 @@ jobs:
           ls -lh release.zip
           echo "=== CHECK node_modules IN ZIP ==="
           unzip -l release.zip | grep "node_modules/" | head
+          echo "=== CHECK PRISMA SYMLINK / WASM ==="
+          unzip -l release.zip | grep -E 'node_modules/\.bin/prisma$|prisma_schema_build_bg\.wasm' | head
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
