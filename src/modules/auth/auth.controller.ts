@@ -10,11 +10,20 @@ import {
 } from './auth.service';
 import { HttpError } from '../../middlewares/HttpError';
 
+// Express res.cookie maxAge는 밀리초 (브라우저 Max-Age 초 단위와 다름)
 const REFRESH_COOKIE_OPTIONS = {
   httpOnly: true,
   secure: process.env.COOKIE_SECURE === 'true',
   sameSite: 'lax' as const,
-  maxAge: 7 * 24 * 60 * 60 * 1000,
+  maxAge: 5 * 24 * 60 * 60 * 1000, // 5일
+  path: '/',
+};
+
+const ACCESS_COOKIE_OPTIONS = {
+  httpOnly: true,
+  secure: process.env.COOKIE_SECURE === 'true',
+  sameSite: 'lax' as const,
+  maxAge: 15 * 60 * 1000, // 15분
   path: '/',
 };
 
@@ -80,10 +89,14 @@ export const login = async (
   try {
     const { email, password } = req.body;
 
-    const { refreshToken, ...loginData } = await loginUser(email, password);
+    const { refreshToken, accessToken, user } = await loginUser(
+      email,
+      password
+    );
 
     res.cookie('refreshToken', refreshToken, REFRESH_COOKIE_OPTIONS);
-    res.status(200).json({ success: true, ...loginData });
+    res.cookie('accessToken', accessToken, ACCESS_COOKIE_OPTIONS);
+    res.status(200).json({ success: true, data: { user } });
   } catch (error) {
     next(error);
   }
@@ -101,13 +114,8 @@ export const logout = async (
       await logoutUser(refreshToken);
     }
 
-    res.clearCookie('refreshToken', {
-      httpOnly: true,
-      secure: process.env.COOKIE_SECURE === 'true',
-      sameSite: 'lax' as const,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-    });
+    res.clearCookie('accessToken', ACCESS_COOKIE_OPTIONS);
+    res.clearCookie('refreshToken', REFRESH_COOKIE_OPTIONS);
 
     res.status(200).json({ success: true, message: '로그아웃 성공' });
   } catch (error) {
@@ -140,11 +148,12 @@ export const refresh = async (
       );
     }
 
-    const { refreshToken: newRefreshToken, ...tokenData } =
+    const { refreshToken: newRefreshToken, accessToken: newAccessToken } =
       await refreshAccessToken(refreshToken);
 
     res.cookie('refreshToken', newRefreshToken, REFRESH_COOKIE_OPTIONS);
-    res.status(200).json({ success: true, data: tokenData });
+    res.cookie('accessToken', newAccessToken, ACCESS_COOKIE_OPTIONS);
+    res.status(200).json({ success: true, message: '토큰 갱신 성공' });
   } catch (error) {
     next(error);
   }
