@@ -5,7 +5,17 @@ import { DEFAULT_PAGE_SIZE } from '../../lib/pagination';
 
 const MAX_PAGE_SIZE = 50;
 const PRODUCT_NAME_MAX_LENGTH = 100;
+const PRODUCT_SEARCH_MAX_LENGTH = 100;
 const PRODUCT_PRICE_MAX = 1_000_000_000;
+const IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const IMAGE_FILENAME_PATTERN = /^[^\\/]+\.(?:jpe?g|png|webp)$/i;
+
+const isProductImageKey = (value: unknown, companyId: number) =>
+  typeof value === 'string' &&
+  new RegExp(
+    `^products/${companyId}/[0-9a-f-]{36}\\.(?:jpe?g|png|webp)$`,
+    'i'
+  ).test(value);
 
 const parseLimit = (raw: unknown) => {
   const parsed = Number(raw);
@@ -20,18 +30,38 @@ export const getProducts = async (
 ) => {
   try {
     const { categoryId, search, sort, cursor, limit } = req.query;
+    const parsedCategoryId = categoryId ? Number(categoryId) : undefined;
+
+    if (
+      parsedCategoryId !== undefined &&
+      (!Number.isInteger(parsedCategoryId) || parsedCategoryId <= 0)
+    ) {
+      throw new HttpError(
+        400,
+        '유효하지 않은 카테고리 id입니다.',
+        'categoryId'
+      );
+    }
 
     const sortValue = typeof sort === 'string' && sort ? sort : 'recent';
     if (!productService.isValidProductSort(sortValue)) {
       throw new HttpError(400, '유효하지 않은 정렬 기준입니다.');
     }
 
+    const normalizedSearch =
+      typeof search === 'string' ? search.trim() : undefined;
+    if (
+      normalizedSearch &&
+      normalizedSearch.length > PRODUCT_SEARCH_MAX_LENGTH
+    ) {
+      throw new HttpError(400, '검색어는 100자 이하로 입력해주세요.', 'search');
+    }
+
     const data = await productService.listProducts({
       companyId: req.user!.companyId,
       userId: req.user!.userId,
-      categoryId: categoryId ? Number(categoryId) : undefined,
-      search:
-        typeof search === 'string' && search.trim() ? search.trim() : undefined,
+      categoryId: parsedCategoryId,
+      search: normalizedSearch || undefined,
       sort: sortValue,
       cursor: typeof cursor === 'string' ? cursor : undefined,
       limit: parseLimit(limit),
@@ -50,7 +80,7 @@ export const getProductById = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id <= 0) {
       throw new HttpError(400, '유효하지 않은 상품 id입니다.');
     }
 
@@ -94,14 +124,20 @@ export const getProductImageUploadUrl = async (
   next: NextFunction
 ) => {
   try {
-    const { filename } = req.body;
-    if (!filename || typeof filename !== 'string') {
+    const { filename, contentType } = req.body;
+    if (
+      typeof filename !== 'string' ||
+      !IMAGE_FILENAME_PATTERN.test(filename) ||
+      typeof contentType !== 'string' ||
+      !IMAGE_TYPES.has(contentType)
+    ) {
       throw new HttpError(400, 'filename을 입력해주세요.', 'filename');
     }
 
     const data = await productService.createProductImageUploadUrl(
       req.user!.companyId,
-      filename
+      filename,
+      contentType
     );
     res.status(200).json({ success: true, data });
   } catch (err) {
@@ -139,7 +175,7 @@ export const createProduct = async (
     if (!linkUrl || typeof linkUrl !== 'string') {
       throw new HttpError(400, '제품 링크를 입력해주세요.', 'linkUrl');
     }
-    if (!s3Key || !filename) {
+    if (!isProductImageKey(s3Key, req.user!.companyId) || !filename) {
       throw new HttpError(400, '상품 이미지를 업로드해주세요.', 's3Key');
     }
 
@@ -167,7 +203,7 @@ export const updateProduct = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id <= 0) {
       throw new HttpError(400, '유효하지 않은 상품 id입니다.');
     }
 
@@ -189,6 +225,10 @@ export const updateProduct = async (
         price > PRODUCT_PRICE_MAX)
     ) {
       throw new HttpError(400, '가격을 올바르게 입력해주세요.', 'price');
+    }
+
+    if (s3Key !== undefined && !isProductImageKey(s3Key, req.user!.companyId)) {
+      throw new HttpError(400, '유효하지 않은 상품 이미지입니다.', 's3Key');
     }
 
     const data = await productService.updateProduct({
@@ -217,7 +257,7 @@ export const deleteProduct = async (
 ) => {
   try {
     const id = Number(req.params.id);
-    if (Number.isNaN(id)) {
+    if (!Number.isInteger(id) || id <= 0) {
       throw new HttpError(400, '유효하지 않은 상품 id입니다.');
     }
 

@@ -9,6 +9,11 @@ declare global {
         role: Role;
         companyId: number;
       };
+      validated?: {
+        params?: unknown;
+        query?: unknown;
+        body?: unknown;
+      };
     }
   }
 }

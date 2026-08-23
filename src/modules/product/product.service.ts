@@ -175,7 +175,8 @@ const assertProductAccess = (
 
 export const createProductImageUploadUrl = async (
   companyId: number,
-  filename: string
+  filename: string,
+  contentType = 'image/png'
 ) => {
   const extension = filename.includes('.')
     ? filename.split('.').pop()
@@ -185,6 +186,7 @@ export const createProductImageUploadUrl = async (
   const command = new PutObjectCommand({
     Bucket: process.env.AWS_S3_BUCKET,
     Key: s3Key,
+    ContentType: contentType,
   });
   const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
 

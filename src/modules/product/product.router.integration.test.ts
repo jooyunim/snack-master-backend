@@ -93,6 +93,14 @@ describe('GET /products', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('100자를 초과한 검색어면 400', async () => {
+    const res = await request(app)
+      .get(`/products?search=${'a'.repeat(101)}`)
+      .set('Authorization', `Bearer ${signToken()}`);
+
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('GET /products/:id', () => {
@@ -134,8 +142,9 @@ describe('POST /products', () => {
     price: 1000,
     categoryId: 10,
     linkUrl: 'https://example.com',
-    s3Key: 'products/1/key.png',
+    s3Key: 'products/1/123e4567-e89b-12d3-a456-426614174000.png',
     filename: 'key.png',
+    contentType: 'image/png',
   };
 
   it.each([
@@ -291,7 +300,7 @@ describe('POST /products/image-upload-url', () => {
     const res = await request(app)
       .post('/products/image-upload-url')
       .set('Authorization', `Bearer ${signToken()}`)
-      .send({ filename: 'photo.png' });
+      .send({ filename: 'photo.png', contentType: 'image/png' });
 
     expect(res.status).toBe(200);
     expect(res.body.data.uploadUrl).toBe('https://signed-url.example.com');
