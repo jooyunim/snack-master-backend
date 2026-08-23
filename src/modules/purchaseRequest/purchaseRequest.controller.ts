@@ -14,13 +14,15 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
-    const { sortBy, page, pageSize } = req.validated!.query as GetRequestsQuery;
+    const { sortBy, page, pageSize, requesterName } = req.validated!
+      .query as GetRequestsQuery;
     const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(
       companyId,
       sortBy,
       page,
-      pageSize
+      pageSize,
+      requesterName
     );
     return res.status(200).json({ success: true, data: requests });
   } catch (err) {
