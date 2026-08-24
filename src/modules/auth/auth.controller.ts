@@ -115,7 +115,14 @@ export const logout = async (
     const { refreshToken } = req.cookies;
 
     if (refreshToken) {
-      await logoutUser(refreshToken);
+      try {
+        await logoutUser(refreshToken);
+      } catch (error) {
+        //이미 만료/무효 200,쿠키 삭제 -> 로그아웃과 같이 작동
+        if (!(error instanceof HttpError && error.statusCode === 401)) {
+          throw error;
+        }
+      }
     }
 
     res.clearCookie('accessToken', ACCESS_COOKIE_OPTIONS);

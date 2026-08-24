@@ -427,7 +427,7 @@ describe('POST /auth/logout', () => {
     jest.clearAllMocks();
   });
 
-  it('토큰이 없으면 200과 쿠키 삭제를 반환한다', async () => {
+  it('토큰이 없으면 200과 쿠키 삭제 반환', async () => {
     const res = await request(app).post('/auth/logout');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -440,7 +440,7 @@ describe('POST /auth/logout', () => {
     );
   });
 
-  it('토큰이 만료되었으면 401 에러 발생', async () => {
+  it('토큰이 만료되었으면 200과 쿠키 삭제 반환', async () => {
     const expiredToken = jwt.sign({ userId: 'user-1' }, 'test-jwt-secret', {
       expiresIn: '-1s',
     });
