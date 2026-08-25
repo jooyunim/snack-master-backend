@@ -261,6 +261,11 @@ PORT=4000
 NODE_ENV=development
 CLIENT_URL=http://localhost:3000
 COOKIE_SECURE=false
+# 프로덕션(FE/BE 서브도메인 분리) 예:
+# CLIENT_URL=https://snackmaster.shop
+# COOKIE_SECURE=true
+# COOKIE_DOMAIN=.snackmaster.shop
+# COOKIE_DOMAIN 미설정 시 CLIENT_URL 호스트로 `.snackmaster.shop` 형태를 추론한다.
 
 # Auth (필수)
 JWT_SECRET=your-jwt-secret
@@ -291,6 +296,7 @@ DB_HOST=
 | `JWT_SECRET` | Access/Refresh 서명 (미들웨어 로드 시 필요) |
 | `CLIENT_URL` | CORS origin (기본 `http://localhost:3000`) |
 | `COOKIE_SECURE` | `'true'`일 때 Secure 쿠키 |
+| `COOKIE_DOMAIN` | 예: `.snackmaster.shop` — FE·API 서브도메인이 쿠키를 공유할 때 필요 |
 | `AWS_S3_BUCKET` | 버킷명 (**코드는 `S3_BUCKET_NAME`이 아님**) |
 | `RESEND_API_KEY` / `FROM_EMAIL` | 초대 메일 |
 | `SEED_PASSWORD` | 시드 유저 비밀번호 (미설정 시 seed 기본값 사용) |
