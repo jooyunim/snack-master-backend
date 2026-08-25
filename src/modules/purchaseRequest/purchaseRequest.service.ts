@@ -366,6 +366,12 @@ export const getMyPurchaseRequest = async (
           name: true,
         },
       },
+      refundedBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -407,6 +413,9 @@ export const getMyPurchaseRequest = async (
     resolutionInfo: {
       resolvedAt: purchaseRequest.resolvedAt,
       resolver: purchaseRequest.resolver,
+      refundedBy: purchaseRequest.refundedBy,
+      refundedAt: purchaseRequest.refundedAt,
+      refundReason: purchaseRequest.refundReason,
       status: purchaseRequest.status,
       message: purchaseRequest.resultMessage,
     },
