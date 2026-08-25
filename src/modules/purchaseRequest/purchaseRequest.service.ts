@@ -7,12 +7,19 @@ export const getRequests = async (
   companyId: number,
   sortBy: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  requesterName?: string
 ) => {
   const skip = (page - 1) * pageSize;
   const [requests, total] = await Promise.all([
-    purchaseRequestRepository.findMany(companyId, sortBy, skip, pageSize),
-    purchaseRequestRepository.count(companyId),
+    purchaseRequestRepository.findMany(
+      companyId,
+      sortBy,
+      skip,
+      pageSize,
+      requesterName
+    ),
+    purchaseRequestRepository.count(companyId, requesterName),
   ]);
 
   const items = requests.map((request) => {

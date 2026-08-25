@@ -1,18 +1,27 @@
 import { z } from 'zod';
 
 export const getRequestsQuerySchema = z.object({
-  page: z.coerce
-    .number()
-    .int('page는 1 이상의 정수여야 합니다.')
-    .min(1, 'page는 1 이상의 정수여야 합니다.')
-    .default(1),
-  pageSize: z.coerce
-    .number()
-    .int('pageSize는 1 이상 50 이하의 정수여야 합니다.')
-    .min(1, 'pageSize는 1 이상 50 이하의 정수여야 합니다.')
-    .max(50, 'pageSize는 1 이상 50 이하의 정수여야 합니다.')
-    .default(10),
+  page: z.preprocess(
+    (val) =>
+      val === '' || val === null || val === undefined ? undefined : val,
+    z.coerce
+      .number()
+      .int('page는 1 이상의 정수여야 합니다.')
+      .min(1, 'page는 1 이상의 정수여야 합니다.')
+      .default(1)
+  ),
+  pageSize: z.preprocess(
+    (val) =>
+      val === '' || val === null || val === undefined ? undefined : val,
+    z.coerce
+      .number()
+      .int('pageSize는 1 이상 50 이하의 정수여야 합니다.')
+      .min(1, 'pageSize는 1 이상 50 이하의 정수여야 합니다.')
+      .max(50, 'pageSize는 1 이상 50 이하의 정수여야 합니다.')
+      .default(10)
+  ),
   sortBy: z.enum(['recent', 'price_asc', 'price_desc']).default('recent'),
+  requesterName: z.string().trim().max(50).optional(),
 });
 
 export type GetRequestsQuery = z.infer<typeof getRequestsQuerySchema>;
@@ -24,6 +33,7 @@ export const approveRequestSchema = z.object({
     .optional(),
   requestPointAmount: z
     .number()
+    .int('올바른 포인트 금액을 입력해 주세요.')
     .min(0, '올바른 포인트 금액을 입력해 주세요.')
     .default(0),
 });
