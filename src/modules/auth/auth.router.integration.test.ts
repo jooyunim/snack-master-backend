@@ -427,7 +427,7 @@ describe('POST /auth/logout', () => {
     jest.clearAllMocks();
   });
 
-  it('토큰이 없으면 200과 쿠키 삭제를 반환한다', async () => {
+  it('토큰이 없으면 200과 쿠키 삭제 반환', async () => {
     const res = await request(app).post('/auth/logout');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -440,16 +440,22 @@ describe('POST /auth/logout', () => {
     );
   });
 
-  it('토큰이 만료되었으면 401 에러 발생', async () => {
+  it('토큰이 만료되었으면 200과 쿠키 삭제 반환', async () => {
     const expiredToken = jwt.sign({ userId: 'user-1' }, 'test-jwt-secret', {
       expiresIn: '-1s',
     });
     const res = await request(app)
       .post('/auth/logout')
       .set('Cookie', `refreshToken=${expiredToken}`);
-    expect(res.status).toBe(401);
-    expect(res.body.message).toBe('유효하지 않은 토큰입니다.');
-    expect(res.body.field).toBe('refreshToken');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.message).toBe('로그아웃 성공');
+    expect(res.headers['set-cookie']).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('accessToken='),
+        expect.stringContaining('refreshToken='),
+      ])
+    );
   });
 
   it('정상 로그아웃이면 200과 쿠키 삭제 반환', async () => {
