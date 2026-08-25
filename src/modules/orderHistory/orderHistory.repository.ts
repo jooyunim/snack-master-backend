@@ -10,6 +10,7 @@ const ORDER_HISTORY_STATUSES: PurchaseRequestStatus[] = [
 const listInclude = {
   requester: { select: { id: true, name: true } },
   resolver: { select: { id: true, name: true } },
+  refundedBy: { select: { id: true, name: true } },
   items: {
     select: { productName: true, price: true, quantity: true },
   },
@@ -92,6 +93,7 @@ export const orderHistoryRepository = {
       include: {
         requester: { select: { id: true, name: true, email: true } },
         resolver: { select: { id: true, name: true } },
+        refundedBy: { select: { id: true, name: true } },
         items: {
           select: {
             id: true,
