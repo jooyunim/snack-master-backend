@@ -13,7 +13,7 @@ export const validateBody = <T>(schema: ZodType<T>) => {
       );
     }
 
-    req.validated = { ...req.validated, body: result.data };
+    req.validatedBody = result.data;
     next();
   };
 };
@@ -29,7 +29,7 @@ export const validateQuery = <T>(schema: ZodType<T>) => {
       );
     }
 
-    req.validated = { ...req.validated, query: result.data };
+    req.validatedQuery = result.data;
     next();
   };
 };
@@ -45,7 +45,7 @@ export const validateParams = <T>(schema: ZodType<T>) => {
       );
     }
 
-    req.validated = { ...req.validated, params: result.data };
+    req.validatedParams = result.data;
     next();
   };
 };

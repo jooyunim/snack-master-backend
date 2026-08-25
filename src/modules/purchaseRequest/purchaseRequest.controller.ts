@@ -14,8 +14,8 @@ export const getRequests = async (
   next: NextFunction
 ) => {
   try {
-    const { sortBy, page, pageSize, requesterName } = req.validated!
-      .query as GetRequestsQuery;
+    const { sortBy, page, pageSize, requesterName } =
+      req.validatedQuery as GetRequestsQuery;
     const companyId = req.user!.companyId;
     const requests = await purchaseRequestService.getRequests(
       companyId,
@@ -36,7 +36,7 @@ export const getRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.validated!.params as RequestIdParams;
+    const { id } = req.validatedParams as RequestIdParams;
     const companyId = req.user!.companyId;
     const request = await purchaseRequestService.getDetail(id, companyId);
     return res.status(200).json({ success: true, data: request });
@@ -51,9 +51,9 @@ export const approveRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.validated!.params as RequestIdParams;
-    const { resultMessage, requestPointAmount } = req.validated!
-      .body as ApproveRequestBody;
+    const { id } = req.validatedParams as RequestIdParams;
+    const { resultMessage, requestPointAmount } =
+      req.validatedBody as ApproveRequestBody;
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
     const result = await purchaseRequestService.approveRequest({
@@ -76,8 +76,8 @@ export const rejectRequest = async (
   next: NextFunction
 ) => {
   try {
-    const { id } = req.validated!.params as RequestIdParams;
-    const { resultMessage } = req.validated!.body as RejectRequestBody;
+    const { id } = req.validatedParams as RequestIdParams;
+    const { resultMessage } = req.validatedBody as RejectRequestBody;
     const companyId = req.user!.companyId;
     const resolverId = req.user!.userId;
     const result = await purchaseRequestService.rejectRequest({

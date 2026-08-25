@@ -6,7 +6,6 @@ jest.mock('../../config/prisma');
 import app from '../../app';
 import prisma from '../../config/prisma';
 
-// jest.setup.ts에서 process.env.JWT_SECRET을 이 값으로 미리 고정해둠
 const JWT_SECRET = 'test-jwt-secret';
 
 const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
@@ -17,6 +16,9 @@ const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
   );
 
 const adminToken = () => signToken({ role: 'ADMIN' });
+
+// 추가: 쿠키 문자열을 만들어주는 헬퍼
+const authCookie = (token: string) => `accessToken=${token}`;
 
 const rawRequest = (overrides: Partial<Record<string, unknown>> = {}) => ({
   id: 1,
@@ -45,7 +47,7 @@ describe('GET /purchase-requests (관리자 목록)', () => {
   it('일반 USER면 403 — 관리자 전용 엔드포인트', async () => {
     const res = await request(app)
       .get('/purchase-requests')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
     expect(res.status).toBe(403);
   });
 
@@ -57,7 +59,7 @@ describe('GET /purchase-requests (관리자 목록)', () => {
 
     const res = await request(app)
       .get('/purchase-requests')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -73,14 +75,14 @@ describe('GET /purchase-requests (관리자 목록)', () => {
   it('page가 1 미만이면 400', async () => {
     const res = await request(app)
       .get('/purchase-requests?page=0')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(400);
   });
 
   it('pageSize가 50을 초과하면 400', async () => {
     const res = await request(app)
       .get('/purchase-requests?pageSize=51')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(400);
   });
 });
@@ -89,14 +91,14 @@ describe('GET /purchase-requests/:id (관리자 상세)', () => {
   it('일반 USER면 403', async () => {
     const res = await request(app)
       .get('/purchase-requests/1')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
     expect(res.status).toBe(403);
   });
 
   it('숫자가 아닌 id면 400', async () => {
     const res = await request(app)
       .get('/purchase-requests/abc')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(400);
   });
 
@@ -105,7 +107,7 @@ describe('GET /purchase-requests/:id (관리자 상세)', () => {
 
     const res = await request(app)
       .get('/purchase-requests/999')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(404);
   });
 
@@ -117,7 +119,7 @@ describe('GET /purchase-requests/:id (관리자 상세)', () => {
 
     const res = await request(app)
       .get('/purchase-requests/1')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(404);
   });
 
@@ -135,7 +137,7 @@ describe('GET /purchase-requests/:id (관리자 상세)', () => {
 
     const res = await request(app)
       .get('/purchase-requests/1')
-      .set('Authorization', `Bearer ${adminToken()}`);
+      .set('Cookie', authCookie(adminToken()));
     expect(res.status).toBe(200);
     expect(res.body.data.isOverBudget).toBe(false);
   });
@@ -145,7 +147,7 @@ describe('PATCH /purchase-requests/:id/approve', () => {
   it('일반 USER면 403', async () => {
     const res = await request(app)
       .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${signToken()}`)
+      .set('Cookie', authCookie(signToken()))
       .send({ requestPointAmount: 0 });
     expect(res.status).toBe(403);
   });
@@ -153,7 +155,7 @@ describe('PATCH /purchase-requests/:id/approve', () => {
   it('포인트 금액이 유효하지 않으면 400', async () => {
     const res = await request(app)
       .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${adminToken()}`)
+      .set('Cookie', authCookie(adminToken()))
       .send({ requestPointAmount: -1 });
     expect(res.status).toBe(400);
   });
@@ -172,7 +174,7 @@ describe('PATCH /purchase-requests/:id/approve', () => {
 
     const res = await request(app)
       .patch('/purchase-requests/1/approve')
-      .set('Authorization', `Bearer ${adminToken()}`)
+      .set('Cookie', authCookie(adminToken()))
       .send({ requestPointAmount: 0 });
 
     expect(res.status).toBe(200);
@@ -184,7 +186,7 @@ describe('PATCH /purchase-requests/:id/reject', () => {
   it('일반 USER면 403', async () => {
     const res = await request(app)
       .patch('/purchase-requests/1/reject')
-      .set('Authorization', `Bearer ${signToken()}`)
+      .set('Cookie', authCookie(signToken()))
       .send({});
     expect(res.status).toBe(403);
   });
@@ -196,7 +198,7 @@ describe('PATCH /purchase-requests/:id/reject', () => {
 
     const res = await request(app)
       .patch('/purchase-requests/1/reject')
-      .set('Authorization', `Bearer ${adminToken()}`)
+      .set('Cookie', authCookie(adminToken()))
       .send({ resultMessage: '재고 없음' });
     expect(res.status).toBe(404);
   });
@@ -208,7 +210,7 @@ describe('PATCH /purchase-requests/:id/reject', () => {
 
     const res = await request(app)
       .patch('/purchase-requests/1/reject')
-      .set('Authorization', `Bearer ${adminToken()}`)
+      .set('Cookie', authCookie(adminToken()))
       .send({ resultMessage: '재고 없음' });
 
     expect(res.status).toBe(200);
