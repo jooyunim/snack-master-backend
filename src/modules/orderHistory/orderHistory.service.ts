@@ -23,7 +23,10 @@ export const getOrders = async (
     resolvedAt: row.resolvedAt, // 구매 승인일
     refundedAt: row.refundedAt, //구매 환불일
     requesterName: row.requester.name, // 요청인
-    resolverName: row.resolver?.name ?? null, // 담당자
+    managerName:
+      row.status === 'REFUNDED'
+        ? (row.refundedBy?.name ?? null)
+        : (row.resolver?.name ?? null),
     items: row.items.map((item) => ({
       productName: item.productName,
     })),
@@ -57,6 +60,7 @@ export const getOrderById = async (companyId: number, orderId: number) => {
     status: order.status,
     requester: order.requester,
     resolver: order.resolver,
+    refundedBy: order.refundedBy,
     requestMessage: order.requestMessage,
     resultMessage: order.resultMessage, // 승인/반려 메시지
     refundReason: order.refundReason,
