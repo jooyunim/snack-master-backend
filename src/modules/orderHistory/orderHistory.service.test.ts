@@ -107,7 +107,7 @@ describe('getOrders', () => {
       expect.objectContaining({
         id: 10,
         requesterName: '요청자',
-        resolverName: '승인자',
+        managerName: '승인자',
         totalQuantity: 3, // 2+1
         totalAmount: 2500,
         shippingFee: 3000,
@@ -116,7 +116,7 @@ describe('getOrders', () => {
     );
   });
 
-  it('담당자가 없으면 resolverName은 null이다', async () => {
+  it('담당자가 없으면 managerName은 null이다', async () => {
     (orderHistoryRepository.findMany as jest.Mock).mockResolvedValue([
       [rawListRow({ resolver: null })],
       1,
@@ -124,7 +124,7 @@ describe('getOrders', () => {
 
     const result = await getOrders(1, 1, 10);
 
-    expect(result.orders[0].resolverName).toBeNull();
+    expect(result.orders[0].managerName).toBeNull();
   });
 });
 
