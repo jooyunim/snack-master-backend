@@ -41,3 +41,6 @@ sudo chown -R ec2-user:ec2-user "$APP_DIR"
 
 echo "=== PRISMA MIGRATIONS ==="
 node "$PRISMA_CLI" migrate deploy
+
+echo "=== PRODUCT SEARCH BACKFILL ==="
+node "$APP_DIR/dist/scripts/backfill-product-search.js"

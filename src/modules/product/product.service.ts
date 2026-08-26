@@ -11,6 +11,7 @@ import {
   buildCursorWhere,
 } from '../../lib/pagination';
 import { getWishedProductIds } from '../wishlist/wishlist.service';
+import { getHangulSearchValues } from '../../lib/hangulSearch';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 
@@ -73,6 +74,7 @@ export const listProducts = async ({
   limit = DEFAULT_PAGE_SIZE,
 }: ListProductsParams) => {
   const { field: sortField, direction } = SORT_OPTIONS[sort];
+  const searchValues = search ? getHangulSearchValues(search) : undefined;
   const categoryIds = categoryId
     ? await resolveCategoryIds(categoryId)
     : undefined;
@@ -81,7 +83,23 @@ export const listProducts = async ({
     companyId,
     deletedAt: null,
     ...(categoryIds && { categoryId: { in: categoryIds } }),
-    ...(search && { name: { contains: search, mode: 'insensitive' } }),
+    ...(search && {
+      OR: [
+        { name: { contains: search, mode: 'insensitive' } },
+        {
+          searchInitials: {
+            contains: searchValues!.initials,
+            mode: 'insensitive',
+          },
+        },
+        {
+          searchJamo: {
+            contains: searchValues!.jamo,
+            mode: 'insensitive',
+          },
+        },
+      ],
+    }),
   };
 
   // 정렬 기준 컬럼이 동적으로 결정되므로 cursor where는 Prisma의 정적 타입과
@@ -213,6 +231,8 @@ export const createProduct = async (input: CreateProductInput) => {
       creatorId: input.creatorId,
       companyId: input.companyId,
       name: input.name,
+      searchInitials: getHangulSearchValues(input.name).initials,
+      searchJamo: getHangulSearchValues(input.name).jamo,
       price: input.price,
       s3Key: input.s3Key,
       filename: input.filename,
@@ -251,7 +271,11 @@ export const updateProduct = async (input: UpdateProductInput) => {
   const updated = await prisma.product.update({
     where: { id: input.id },
     data: {
-      ...(input.name !== undefined && { name: input.name }),
+      ...(input.name !== undefined && {
+        name: input.name,
+        searchInitials: getHangulSearchValues(input.name).initials,
+        searchJamo: getHangulSearchValues(input.name).jamo,
+      }),
       ...(input.price !== undefined && { price: input.price }),
       ...(input.categoryId !== undefined && { categoryId: input.categoryId }),
       ...(input.linkUrl !== undefined && { linkUrl: input.linkUrl }),
