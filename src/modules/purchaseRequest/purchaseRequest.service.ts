@@ -7,12 +7,19 @@ export const getRequests = async (
   companyId: number,
   sortBy: string,
   page: number,
-  pageSize: number
+  pageSize: number,
+  requesterName?: string
 ) => {
   const skip = (page - 1) * pageSize;
   const [requests, total] = await Promise.all([
-    purchaseRequestRepository.findMany(companyId, sortBy, skip, pageSize),
-    purchaseRequestRepository.count(companyId),
+    purchaseRequestRepository.findMany(
+      companyId,
+      sortBy,
+      skip,
+      pageSize,
+      requesterName
+    ),
+    purchaseRequestRepository.count(companyId, requesterName),
   ]);
 
   const items = requests.map((request) => {
@@ -359,6 +366,12 @@ export const getMyPurchaseRequest = async (
           name: true,
         },
       },
+      refundedBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -400,6 +413,9 @@ export const getMyPurchaseRequest = async (
     resolutionInfo: {
       resolvedAt: purchaseRequest.resolvedAt,
       resolver: purchaseRequest.resolver,
+      refundedBy: purchaseRequest.refundedBy,
+      refundedAt: purchaseRequest.refundedAt,
+      refundReason: purchaseRequest.refundReason,
       status: purchaseRequest.status,
       message: purchaseRequest.resultMessage,
     },

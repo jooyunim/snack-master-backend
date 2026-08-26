@@ -68,22 +68,28 @@ describe('getOrders', () => {
       1,
       10, // (2-1)*10
       10,
-      { resolvedAt: 'desc' }
+      'latest'
     );
   });
 
-  it('amountAsc / amountDesc 정렬을 totalAmount로 매핑한다', async () => {
+  it('amountAsc / amountDesc 정렬을 repository에 sort로 넘긴다', async () => {
     (orderHistoryRepository.findMany as jest.Mock).mockResolvedValue([[], 0]);
 
     await getOrders(1, 1, 10, 'amountAsc');
-    expect(orderHistoryRepository.findMany).toHaveBeenLastCalledWith(1, 0, 10, {
-      totalAmount: 'asc',
-    });
+    expect(orderHistoryRepository.findMany).toHaveBeenLastCalledWith(
+      1,
+      0,
+      10,
+      'amountAsc'
+    );
 
     await getOrders(1, 1, 10, 'amountDesc');
-    expect(orderHistoryRepository.findMany).toHaveBeenLastCalledWith(1, 0, 10, {
-      totalAmount: 'desc',
-    });
+    expect(orderHistoryRepository.findMany).toHaveBeenLastCalledWith(
+      1,
+      0,
+      10,
+      'amountDesc'
+    );
   });
 
   it('목록을 응답 형태로 매핑하고 totalQuantity를 합산한다', async () => {

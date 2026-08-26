@@ -1,22 +1,7 @@
-import { Prisma } from '@prisma/client';
+import { PointType } from '@prisma/client';
 import { HttpError } from '../../middlewares/HttpError';
 import { orderHistoryRepository } from './orderHistory.repository';
 import type { OrderSort } from './orderHistory.constants';
-import { PointType } from '@prisma/client';
-
-const getOrderBy = (
-  sort: OrderSort
-): Prisma.PurchaseRequestOrderByWithRelationInput => {
-  switch (sort) {
-    case 'amountAsc':
-      return { totalAmount: 'asc' };
-    case 'amountDesc':
-      return { totalAmount: 'desc' };
-    case 'latest':
-    default:
-      return { resolvedAt: 'desc' };
-  }
-};
 
 // 구매 내역 목록 + 페이지네이션
 export const getOrders = async (
@@ -29,15 +14,19 @@ export const getOrders = async (
     companyId,
     (page - 1) * pageSize,
     pageSize,
-    getOrderBy(sort)
+    sort
   );
 
   const orders = rows.map((row) => ({
     id: row.id,
     requestedAt: row.requestedAt, // 구매 요청일
     resolvedAt: row.resolvedAt, // 구매 승인일
+    refundedAt: row.refundedAt, //구매 환불일
     requesterName: row.requester.name, // 요청인
-    resolverName: row.resolver?.name ?? null, // 담당자
+    managerName:
+      row.status === 'REFUNDED'
+        ? (row.refundedBy?.name ?? null)
+        : (row.resolver?.name ?? null),
     items: row.items.map((item) => ({
       productName: item.productName,
     })),
@@ -71,8 +60,11 @@ export const getOrderById = async (companyId: number, orderId: number) => {
     status: order.status,
     requester: order.requester,
     resolver: order.resolver,
+    refundedBy: order.refundedBy,
     requestMessage: order.requestMessage,
     resultMessage: order.resultMessage, // 승인/반려 메시지
+    refundReason: order.refundReason,
+    refundedAt: order.refundedAt,
     shippingFee: order.shippingFee,
     pointsUsed,
     pointsEarned,
