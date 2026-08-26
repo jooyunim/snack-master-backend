@@ -21,6 +21,8 @@ const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
     { expiresIn: '1h' }
   );
 
+const authCookie = (token: string) => `accessToken=${token}`;
+
 describe('GET /dashboard/summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -34,7 +36,7 @@ describe('GET /dashboard/summary', () => {
   it('USER 역할이면 403', async () => {
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken({ role: Role.USER })}`);
+      .set('Cookie', authCookie(signToken({ role: Role.USER })));
 
     expect(res.status).toBe(403);
   });
@@ -49,7 +51,7 @@ describe('GET /dashboard/summary', () => {
 
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -70,7 +72,7 @@ describe('GET /dashboard/summary', () => {
 
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual(

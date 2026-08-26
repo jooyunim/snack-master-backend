@@ -14,8 +14,10 @@ const rawListRow = (overrides: Partial<Record<string, unknown>> = {}) => ({
   id: 10,
   requestedAt: new Date('2026-01-01'),
   resolvedAt: new Date('2026-01-02'),
+  refundedAt: null,
   requester: { id: 'u1', name: '요청자' },
   resolver: { id: 'a1', name: '승인자' },
+  refundedBy: null,
   items: [
     { productName: '과자A', price: 1000, quantity: 2 },
     { productName: '과자B', price: 500, quantity: 1 },
@@ -33,8 +35,11 @@ const rawDetail = (overrides: Partial<Record<string, unknown>> = {}) => ({
   status: PurchaseRequestStatus.APPROVED,
   requester: { id: 'u1', name: '요청자', email: 'a@test.com' },
   resolver: { id: 'a1', name: '승인자' },
+  refundedBy: null,
   requestMessage: '부탁드려요',
   resultMessage: '승인합니다',
+  refundReason: null,
+  refundedAt: null,
   shippingFee: 3000,
   pointsUsed: 500,
   totalAmount: 2500,
@@ -124,7 +129,24 @@ describe('getOrders', () => {
 
     const result = await getOrders(1, 1, 10);
 
-    expect(result.orders[0].resolverName).toBeNull();
+    expect(result.orders[0].managerName).toBeNull();
+  });
+
+  it('환불 상태면 managerName은 refundedBy 이름을 쓴다', async () => {
+    (orderHistoryRepository.findMany as jest.Mock).mockResolvedValue([
+      [
+        rawListRow({
+          status: PurchaseRequestStatus.REFUNDED,
+          resolver: { id: 'a1', name: '승인자' },
+          refundedBy: { id: 'r1', name: '환불담당' },
+        }),
+      ],
+      1,
+    ]);
+
+    const result = await getOrders(1, 1, 10);
+
+    expect(result.orders[0].managerName).toBe('환불담당');
   });
 });
 
