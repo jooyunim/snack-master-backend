@@ -3,6 +3,7 @@ import { Role } from '@prisma/client';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { HttpError } from '../../middlewares/HttpError';
+import { getHangulSearchValues } from '../../lib/hangulSearch';
 
 jest.mock('../../config/prisma');
 jest.mock('@aws-sdk/client-s3', () => ({
@@ -93,13 +94,27 @@ describe('listProducts', () => {
     );
   });
 
-  it('search가 있으면 name 부분일치(대소문자 무시) 조건이 들어간다', async () => {
-    await listProducts({ companyId: 1, sort: 'recent', search: '초코' });
+  it('search가 있으면 이름·초성·자모 검색 조건이 들어간다', async () => {
+    await listProducts({ companyId: 1, sort: 'recent', search: 'ㅁㄴㅁ' });
 
     expect(prisma.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
-          name: { contains: '초코', mode: 'insensitive' },
+          OR: expect.arrayContaining([
+            { name: { contains: 'ㅁㄴㅁ', mode: 'insensitive' } },
+            {
+              searchInitials: {
+                contains: 'ㅁㄴㅁ',
+                mode: 'insensitive',
+              },
+            },
+            {
+              searchJamo: {
+                contains: getHangulSearchValues('ㅁㄴㅁ').jamo,
+                mode: 'insensitive',
+              },
+            },
+          ]),
         }),
       })
     );
@@ -347,6 +362,8 @@ describe('createProduct', () => {
         creatorId: 'user-1',
         companyId: 1,
         name: '테스트 상품',
+        searchInitials: getHangulSearchValues('테스트 상품').initials,
+        searchJamo: getHangulSearchValues('테스트 상품').jamo,
         price: 1000,
         s3Key: 'key.png',
         filename: 'key.png',
@@ -381,7 +398,12 @@ describe('updateProduct / deleteProduct 권한 검사', () => {
 
     expect(prisma.product.update).toHaveBeenCalledWith({
       where: { id: 5 },
-      data: { name: '수정된 이름', price: 3000 },
+      data: {
+        name: '수정된 이름',
+        searchInitials: getHangulSearchValues('수정된 이름').initials,
+        searchJamo: getHangulSearchValues('수정된 이름').jamo,
+        price: 3000,
+      },
     });
   });
 

@@ -76,6 +76,8 @@ model Product {
   creatorId  String    @db.Uuid
   companyId  Int
   name       String
+  searchInitials String @default("")
+  searchJamo     String @default("")
   price      Int
   s3Key      String
   filename   String
