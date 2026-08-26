@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import prisma from '../config/prisma';
 import { getHangulSearchValues } from '../lib/hangulSearch';
 
