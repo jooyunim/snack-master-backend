@@ -124,7 +124,7 @@ describe('getOrders', () => {
 
     const result = await getOrders(1, 1, 10);
 
-    expect(result.orders[0].managerName).toBeNull();
+    expect(result.orders[0].resolverName).toBeNull();
   });
 });
 
