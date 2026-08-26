@@ -20,13 +20,17 @@ export const findMany = async (
   companyId: number,
   sortBy: string,
   skip: number,
-  take: number
+  take: number,
+  requesterName?: string
 ) => {
   const orderBy = getOrderBy(sortBy);
   return await prisma.purchaseRequest.findMany({
     where: {
       companyId,
       status: 'PENDING',
+      ...(requesterName && {
+        requester: { name: { contains: requesterName, mode: 'insensitive' } },
+      }),
     },
     orderBy,
     skip,
@@ -47,9 +51,15 @@ export const findMany = async (
 };
 
 //구매 요청 목록 총 개수
-export const count = async (companyId: number) => {
+export const count = async (companyId: number, requesterName?: string) => {
   return await prisma.purchaseRequest.count({
-    where: { companyId, status: 'PENDING' },
+    where: {
+      companyId,
+      status: 'PENDING',
+      ...(requesterName && {
+        requester: { name: { contains: requesterName, mode: 'insensitive' } },
+      }),
+    },
   });
 };
 
