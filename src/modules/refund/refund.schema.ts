@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const REFUND_REASON_MAX = 500;
+export const REFUND_REASON_MAX = 100;
 
 export const createRefundSchema = z.object({
   refundReason: z
