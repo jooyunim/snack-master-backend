@@ -21,6 +21,8 @@ const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
     { expiresIn: '1h' }
   );
 
+const authCookie = (token: string) => `accessToken=${token}`;
+
 const rawListRow = () => ({
   id: 10,
   requestedAt: new Date('2026-01-01'),
@@ -69,7 +71,7 @@ describe('GET /orders', () => {
   it('USER 역할이면 403', async () => {
     const res = await request(app)
       .get('/orders')
-      .set('Authorization', `Bearer ${signToken({ role: Role.USER })}`);
+      .set('Cookie', authCookie(signToken({ role: Role.USER })));
 
     expect(res.status).toBe(403);
   });
@@ -77,12 +79,13 @@ describe('GET /orders', () => {
   it('잘못된 sort면 400', async () => {
     const res = await request(app)
       .get('/orders?sort=wrong')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(400);
   });
 
   it('ADMIN이면 200과 { success, data }를 반환한다', async () => {
+    (prisma.$queryRaw as jest.Mock).mockResolvedValue([{ id: 10 }]);
     (prisma.purchaseRequest.findMany as jest.Mock).mockResolvedValue([
       rawListRow(),
     ]);
@@ -90,7 +93,7 @@ describe('GET /orders', () => {
 
     const res = await request(app)
       .get('/orders?page=1&pageSize=10&sort=latest')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -109,7 +112,7 @@ describe('GET /orders/:id', () => {
   it('숫자가 아닌 id면 400', async () => {
     const res = await request(app)
       .get('/orders/abc')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(400);
   });
@@ -119,7 +122,7 @@ describe('GET /orders/:id', () => {
 
     const res = await request(app)
       .get('/orders/999')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(404);
   });
@@ -131,7 +134,7 @@ describe('GET /orders/:id', () => {
 
     const res = await request(app)
       .get('/orders/10')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);

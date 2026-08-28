@@ -21,6 +21,8 @@ const signToken = (overrides: Partial<Record<string, unknown>> = {}) =>
     { expiresIn: '1h' }
   );
 
+const authCookie = (token: string) => `accessToken=${token}`;
+
 describe('GET /dashboard/summary', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -34,14 +36,14 @@ describe('GET /dashboard/summary', () => {
   it('USER 역할이면 403', async () => {
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken({ role: Role.USER })}`);
+      .set('Cookie', authCookie(signToken({ role: Role.USER })));
 
     expect(res.status).toBe(403);
   });
 
   it('ADMIN이면 200과 { success, data }를 반환한다', async () => {
     (prisma.purchaseRequest.aggregate as jest.Mock).mockResolvedValue({
-      _sum: { totalAmount: 30000 },
+      _sum: { totalAmount: 30000, pointsUsed: 0 },
     });
     (prisma.budget.findUnique as jest.Mock).mockResolvedValue({
       amount: 70000,
@@ -49,28 +51,50 @@ describe('GET /dashboard/summary', () => {
 
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data).toEqual(
       expect.objectContaining({
         remainingBudget: 70000,
-        thisMonthExpense: 30000,
+        thisMonthExpense: 30000, // totalAmount - pointsUsed
         currentMonthBudget: 100000, // 70000 + 30000
+      })
+    );
+  });
+
+  it('지출은 totalAmount에서 pointsUsed를 뺀 실결제액이다', async () => {
+    (prisma.purchaseRequest.aggregate as jest.Mock).mockResolvedValue({
+      _sum: { totalAmount: 30000, pointsUsed: 5000 },
+    });
+    (prisma.budget.findUnique as jest.Mock).mockResolvedValue({
+      amount: 70000,
+    });
+
+    const res = await request(app)
+      .get('/dashboard/summary')
+      .set('Cookie', authCookie(signToken()));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        thisMonthExpense: 25000, // 30000 - 5000
+        remainingBudget: 70000,
+        currentMonthBudget: 95000, // 70000 + 25000
       })
     );
   });
 
   it('예산/지출이 없으면 0으로 내려준다', async () => {
     (prisma.purchaseRequest.aggregate as jest.Mock).mockResolvedValue({
-      _sum: { totalAmount: null },
+      _sum: { totalAmount: null, pointsUsed: null },
     });
     (prisma.budget.findUnique as jest.Mock).mockResolvedValue(null);
 
     const res = await request(app)
       .get('/dashboard/summary')
-      .set('Authorization', `Bearer ${signToken()}`);
+      .set('Cookie', authCookie(signToken()));
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual(
